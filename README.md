@@ -64,15 +64,21 @@ npm run build      # typecheck + production build
 - `src/components/` — the design-system primitives (`Glass`, `Button`, `Kbd`,
   `Badge`, `Input`, `EntityRow`, `OriginBadge`, `Port`, `PermissionLine`, `Icon`).
 - `src/shell/` — the surface: `Palette` (⌘K), `Panes` (split + wires), `Trust`
-  (permission + secret chrome), `tools` (native + sandboxed-foreign interiors), `data`.
+  (permission + secret chrome), `data`.
+- `src/runtime/` — the **boundary**: tools run for real in cross-origin sandboxed
+  iframes, with `ctx` (storage / secrets / net / bus / ui) proxied over a
+  MessagePort the host mediates. See [docs/runtime.md](docs/runtime.md).
 - `src/App.tsx` — orchestrator: theme, panes, wiring, palette, trust gate.
 
-> The shell is the frame. Tool execution (cross-origin sandboxed iframes, the
-> `ctx` bus, secret injection, the `net` relay) is product runtime, not visual
-> design — the interiors here are demo stand-ins. See `docs/`.
+> The runtime boundary is implemented: every tool — yours or a stranger's — runs
+> in an opaque-origin iframe with `connect-src 'none'` and reaches the world only
+> through `ctx`. The bundled tools (`src/runtime/tools/`) are real tools authored
+> against that contract, not React stand-ins. Still product runtime, not visual
+> design: the registry/discovery backend and the `net` relay fallback are next.
 
 ## Status
 
-Design phase. Shell client implemented from the design system (above). The SDK
-contract (storage, secrets, net, bus) is under discussion — see
-[docs/sdk.md](docs/sdk.md).
+Runtime boundary implemented — sandboxed iframes + the host-mediated `ctx` bridge
+(storage, secrets, net allowlist + injection, bus, ui), exercised by the bundled
+demo tools. Next: the git manifest loader and the registry/`net`-relay backend.
+SDK contract — see [docs/sdk.md](docs/sdk.md) and [docs/runtime.md](docs/runtime.md).
