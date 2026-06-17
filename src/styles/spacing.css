@@ -1,0 +1,62 @@
+/* ============================================================================
+   toolboy — SPACING, RADII, BLUR, MOTION, Z-INDEX
+   4px base grid. Generous whitespace. Soft radii. Fast, fluid micro-motion.
+   ============================================================================ */
+
+:root {
+  /* spacing scale (4px base) */
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+  --space-32: 128px;
+
+  /* corner radii — soft, never sharp */
+  --radius-xs:   6px;
+  --radius-sm:   9px;
+  --radius-md:   12px;   /* default control */
+  --radius-lg:   16px;   /* cards */
+  --radius-xl:   22px;   /* panels / popover */
+  --radius-2xl:  28px;   /* large surfaces */
+  --radius-pill: 999px;
+
+  /* blur — the frosted depth of the glass */
+  --blur-sm:  10px;
+  --blur-md:  20px;   /* default panel blur */
+  --blur-lg:  32px;
+  --blur-xl:  48px;   /* command palette / modal */
+  --blur-saturate: 140%;
+
+  /* hairline border width */
+  --hairline: 1px;
+
+  /* motion — fast, fluid, nothing bounces */
+  --dur-instant: 80ms;  /* @kind other */
+  --dur-fast:    140ms; /* @kind other */
+  --dur-base:    220ms; /* @kind other */
+  --dur-slow:    340ms; /* @kind other */
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1); /* @kind other */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1); /* @kind other */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1); /* @kind other */
+
+  /* z-index ladder */
+  --z-surface:  0;   /* @kind other */
+  --z-pane:     10;  /* @kind other */
+  --z-divider:  20;  /* @kind other */
+  --z-header:   30;  /* @kind other */
+  --z-wire:     40;  /* @kind other */
+  --z-popover:  100; /* @kind other */
+  --z-palette:  200; /* @kind other */
+  --z-scrim:    300; /* @kind other */
+  --z-system:   310; /* @kind other */
+  --z-toast:    400; /* @kind other */
+}

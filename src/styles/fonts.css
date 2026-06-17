@@ -1,0 +1,20 @@
+/* toolboy webfonts — variable woff2, latin subset.
+   NOTE: toolboy had no brand typeface (design-phase product). These are chosen
+   substitutes: Hanken Grotesk (humanist grotesk for UI/display) + JetBrains Mono
+   (keys, ports, types, IDs, code). Swap if a real brand face is chosen. */
+
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../assets/fonts/HankenGrotesk-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('../assets/fonts/JetBrainsMono-latin.woff2') format('woff2');
+}

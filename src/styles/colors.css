@@ -1,0 +1,133 @@
+/* ============================================================================
+   toolboy — COLOR SYSTEM
+   A calm glass surface over a subtle ambient gradient. One accent (azure).
+   A second meaningful hue (amber) signals PUBLIC / guest origin.
+   System trust chrome uses a distinct, near-solid, higher-contrast treatment.
+   Default theme = dark. Light theme via [data-theme="light"].
+   ============================================================================ */
+
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* --- BASE: ambient backdrop (the gradient the glass floats on) --- */
+  --bg-base:        oklch(0.21 0.024 264);   /* deep cool slate */
+  --bg-ambient-1:   oklch(0.30 0.060 258);   /* faint blue bloom */
+  --bg-ambient-2:   oklch(0.26 0.045 196);   /* faint teal bloom */
+  --bg-ambient-3:   oklch(0.24 0.040 300);   /* whisper of violet, low sat */
+  --bg-vignette:    oklch(0.15 0.020 264);   /* edge darkening */
+
+  /* --- FOREGROUND: text on glass --- */
+  --fg-1: oklch(0.98 0.004 260);   /* primary */
+  --fg-2: oklch(0.80 0.010 260);   /* secondary */
+  --fg-3: oklch(0.66 0.012 260);   /* muted / captions */
+  --fg-4: oklch(0.54 0.014 260);   /* faint / placeholders, hints */
+  --fg-on-accent: oklch(0.99 0.004 250);
+
+  /* --- ACCENT (azure): selection, focus, wires, "yours/own" origin --- */
+  --accent:        oklch(0.66 0.165 252);
+  --accent-strong: oklch(0.60 0.180 252);
+  --accent-soft:   oklch(0.66 0.165 252 / 0.16);
+  --accent-faint:  oklch(0.66 0.165 252 / 0.08);
+  --accent-ring:   oklch(0.66 0.165 252 / 0.45);
+
+  /* --- PUBLIC origin (amber): trusted-but-guest --- */
+  --public:        oklch(0.80 0.135 78);
+  --public-soft:   oklch(0.80 0.135 78 / 0.16);
+  --public-faint:  oklch(0.80 0.135 78 / 0.09);
+  --public-ring:   oklch(0.80 0.135 78 / 0.40);
+
+  /* --- SEMANTIC status --- */
+  --ok:      oklch(0.74 0.145 158);
+  --ok-soft: oklch(0.74 0.145 158 / 0.16);
+  --warn:    oklch(0.80 0.135 78);
+  --warn-soft: oklch(0.80 0.135 78 / 0.16);
+  --danger:  oklch(0.65 0.190 18);
+  --danger-soft: oklch(0.65 0.190 18 / 0.16);
+
+  /* --- GLASS MATERIAL (the core recipe) --- */
+  --glass-fill:        rgba(255, 255, 255, 0.055);  /* translucent body */
+  --glass-fill-strong: rgba(255, 255, 255, 0.085);  /* raised / hovered glass */
+  --glass-fill-inset:  rgba(8, 12, 22, 0.28);       /* recessed wells (inputs) */
+  --glass-stroke:      rgba(255, 255, 255, 0.14);   /* hairline border */
+  --glass-stroke-hi:   rgba(255, 255, 255, 0.30);   /* top light-catch edge */
+  --glass-stroke-lo:   rgba(0, 0, 0, 0.22);         /* bottom shade edge */
+  --glass-highlight:   rgba(255, 255, 255, 0.06);   /* inner top sheen */
+
+  /* --- SYSTEM / TRUST chrome (unspoofable host UI) --- */
+  --system-fill:   oklch(0.24 0.022 264 / 0.92);    /* near-solid, NOT glass */
+  --system-stroke: var(--accent-ring);
+  --system-scrim:  oklch(0.12 0.02 264 / 0.62);
+  --secret-field:  oklch(0.16 0.018 264 / 0.85);
+
+  /* --- ELEVATION SHADOWS (depth from layered shadow, not edges) --- */
+  --shadow-1: 0 1px 2px rgba(0,0,0,0.20), 0 1px 1px rgba(0,0,0,0.14);
+  --shadow-2: 0 6px 16px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.20);
+  --shadow-3: 0 18px 48px rgba(0,0,0,0.40), 0 6px 16px rgba(0,0,0,0.28);
+  --shadow-4: 0 40px 96px rgba(0,0,0,0.52), 0 12px 32px rgba(0,0,0,0.34);
+  --shadow-inset: inset 0 1px 0 var(--glass-highlight);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --bg-base:        oklch(0.95 0.010 250);
+  --bg-ambient-1:   oklch(0.92 0.045 252);
+  --bg-ambient-2:   oklch(0.94 0.035 196);
+  --bg-ambient-3:   oklch(0.93 0.030 300);
+  --bg-vignette:    oklch(0.88 0.012 250);
+
+  --fg-1: oklch(0.26 0.020 264);
+  --fg-2: oklch(0.42 0.018 264);
+  --fg-3: oklch(0.54 0.016 264);
+  --fg-4: oklch(0.64 0.014 264);
+  --fg-on-accent: oklch(0.99 0.004 250);
+
+  --accent:        oklch(0.58 0.175 252);
+  --accent-strong: oklch(0.52 0.190 252);
+  --accent-soft:   oklch(0.58 0.175 252 / 0.14);
+  --accent-faint:  oklch(0.58 0.175 252 / 0.07);
+  --accent-ring:   oklch(0.58 0.175 252 / 0.40);
+
+  --public:        oklch(0.62 0.135 64);
+  --public-soft:   oklch(0.62 0.135 64 / 0.14);
+  --public-faint:  oklch(0.62 0.135 64 / 0.08);
+  --public-ring:   oklch(0.62 0.135 64 / 0.38);
+
+  --ok:      oklch(0.56 0.135 158);
+  --ok-soft: oklch(0.56 0.135 158 / 0.14);
+  --warn:    oklch(0.62 0.135 64);
+  --warn-soft: oklch(0.62 0.135 64 / 0.14);
+  --danger:  oklch(0.55 0.195 22);
+  --danger-soft: oklch(0.55 0.195 22 / 0.13);
+
+  --glass-fill:        rgba(255, 255, 255, 0.55);
+  --glass-fill-strong: rgba(255, 255, 255, 0.72);
+  --glass-fill-inset:  rgba(255, 255, 255, 0.40);
+  --glass-stroke:      rgba(255, 255, 255, 0.70);
+  --glass-stroke-hi:   rgba(255, 255, 255, 0.95);
+  --glass-stroke-lo:   rgba(20, 30, 60, 0.10);
+  --glass-highlight:   rgba(255, 255, 255, 0.65);
+
+  --system-fill:   oklch(0.99 0.004 250 / 0.94);
+  --system-stroke: var(--accent-ring);
+  --system-scrim:  oklch(0.55 0.03 264 / 0.30);
+  --secret-field:  oklch(0.97 0.006 250 / 0.92);
+
+  --shadow-1: 0 1px 2px rgba(20,30,60,0.08), 0 1px 1px rgba(20,30,60,0.05);
+  --shadow-2: 0 6px 16px rgba(20,30,60,0.10), 0 2px 6px rgba(20,30,60,0.07);
+  --shadow-3: 0 18px 48px rgba(20,30,60,0.14), 0 6px 16px rgba(20,30,60,0.09);
+  --shadow-4: 0 40px 96px rgba(20,30,60,0.20), 0 12px 32px rgba(20,30,60,0.12);
+  --shadow-inset: inset 0 1px 0 var(--glass-highlight);
+}
+
+/* The ambient backdrop. Apply to the surface root (body or a .tb-surface). */
+.tb-ambient {
+  background:
+    radial-gradient(60% 55% at 18% 8%,  var(--bg-ambient-1) 0%, transparent 60%),
+    radial-gradient(55% 50% at 88% 22%, var(--bg-ambient-2) 0%, transparent 58%),
+    radial-gradient(70% 60% at 70% 100%, var(--bg-ambient-3) 0%, transparent 62%),
+    radial-gradient(120% 120% at 50% 0%, transparent 55%, var(--bg-vignette) 100%),
+    var(--bg-base);
+  background-attachment: fixed;
+}
