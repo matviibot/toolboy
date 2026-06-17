@@ -8,7 +8,7 @@ import type { CSSProperties } from "react";
 import { Glass, IconButton, OriginBadge, Icon } from "../components";
 import { tools as TOOLS } from "./data";
 import type { Pane, Tool, Wire } from "./types";
-import { ToolInterior } from "./tools";
+import { SandboxedTool } from "../runtime/SandboxedTool";
 
 /** an output's type can feed an input port when types match (json coerces to text). */
 function compatible(outType: string, inType: string): boolean {
@@ -151,9 +151,11 @@ export interface SplitSurfaceProps {
   onSplit: (uid: string) => void;
   onSend: (fromUid: string, toUid: string) => void;
   onOutput: (uid: string, value: unknown) => void;
+  theme: "dark" | "light";
+  onToast: (message: string, tone: "info" | "success" | "error") => void;
 }
 
-export function SplitSurface({ panes, wires, sizes, onResize, onClose, onSplit, onSend, onOutput }: SplitSurfaceProps) {
+export function SplitSurface({ panes, wires, sizes, onResize, onClose, onSplit, onSend, onOutput, theme, onToast }: SplitSurfaceProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [tick, setTick] = useState(0);
   const bump = () => setTick((t) => t + 1);
@@ -276,8 +278,8 @@ export function SplitSurface({ panes, wires, sizes, onResize, onClose, onSplit, 
             <div style={{ position: "relative", flex: `${sizes[i]} 1 0`, minWidth: 0, display: "flex" }}>
               <Glass elevation="panel" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: "var(--radius-lg)" }}>
                 <PaneHeader tool={tool} single={panes.length === 1} onSplit={() => onSplit(pane.uid)} onClose={() => onClose(pane.uid)} />
-                <div style={{ flex: 1, minHeight: 0, overflow: "auto" }}>
-                  <ToolInterior tool={tool} input={pane.input} onOutput={(v) => onOutput(pane.uid, v)} />
+                <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                  <SandboxedTool tool={tool} input={pane.input} theme={theme} onOutput={(v) => onOutput(pane.uid, v)} onToast={onToast} />
                 </div>
               </Glass>
 

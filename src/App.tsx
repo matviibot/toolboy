@@ -63,6 +63,13 @@ export default function App() {
   const [palette, setPalette] = useState<PaletteState>(false);
   const [trust, setTrust] = useState<TrustState | null>(null);
   const [updates, setUpdates] = useState(true);
+  const [toasts, setToasts] = useState<{ id: number; message: string; tone: "info" | "success" | "error" }[]>([]);
+
+  const pushToast = useCallback((message: string, tone: "info" | "success" | "error") => {
+    const id = UID++;
+    setToasts((ts) => [...ts, { id, message, tone }]);
+    window.setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 3200);
+  }, []);
 
   useEffect(() => { document.documentElement.setAttribute("data-theme", theme); }, [theme]);
 
@@ -182,6 +189,8 @@ export default function App() {
             onSplit={(uid) => setPalette({ splitFrom: uid })}
             onSend={onSend}
             onOutput={onOutput}
+            theme={theme}
+            onToast={pushToast}
           />
         </div>
       )}
@@ -196,6 +205,18 @@ export default function App() {
           onCancel={() => setTrust(null)}
           onGrant={() => { const a = trust.action; setTrust(null); a?.(); }}
         />
+      )}
+
+      {/* ctx.ui.toast — host chrome, drawn outside any tool frame */}
+      {toasts.length > 0 && (
+        <div style={{ position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)", display: "flex", flexDirection: "column", gap: 8, zIndex: "var(--z-popover)", alignItems: "center" } as CSSProperties}>
+          {toasts.map((t) => (
+            <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 14px", borderRadius: "var(--radius-pill)", background: "var(--glass-fill)", border: "1px solid var(--glass-stroke)", backdropFilter: "blur(var(--blur-md))", boxShadow: "var(--shadow-2)", font: "var(--type-caption)", color: "var(--fg-1)", animation: "tbFade var(--dur-base) var(--ease-out)" }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", flex: "none", background: t.tone === "error" ? "var(--danger)" : t.tone === "success" ? "var(--ok)" : "var(--accent)" }} />
+              {t.message}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
