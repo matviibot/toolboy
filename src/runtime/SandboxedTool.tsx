@@ -114,7 +114,11 @@ export function SandboxedTool({ tool, inputs, theme, onOutput, onToast }: Sandbo
       title={tool.name}
       srcDoc={srcDoc}
       sandbox="allow-scripts"
-      style={{ width: "100%", height: "100%", border: "none", display: "block", background: "transparent" }}
+      // the frame is a replaced element in the host document: prohibit it from
+      // being caught in a host-side selection (e.g. while dragging a wire or a
+      // divider across it). This is scoped to the host doc and does not affect
+      // text selection inside the tool's own document.
+      style={{ width: "100%", height: "100%", border: "none", display: "block", background: "transparent", userSelect: "none", WebkitUserSelect: "none" }}
     />
   );
 }
