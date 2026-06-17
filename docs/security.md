@@ -7,7 +7,7 @@ from strangers' repos). This document is the threat model and the defenses.
 
 The host (your toolboy instance) holds things a malicious tool would want:
 
-- **Local data** — IndexedDB (per-tool storage, workspace state).
+- **Local data** — IndexedDB (per-tool storage, toolchain state).
 - **Secrets** — API keys in a local keyring.
 - **Network identity** — your IP, your cookies, your authenticated sessions.
 - **The DOM / other tools** — the surface, the palette, neighboring panes.
@@ -40,7 +40,7 @@ functionally.
 ## Capabilities (declare → consent → grant)
 
 The manifest declares everything a tool can touch; the host grants only what's declared,
-after user consent (one aggregated prompt per tool, or per workspace scene).
+after user consent (one aggregated prompt per tool, or per toolchain scene).
 
 ```jsonc
 "permissions": {
@@ -88,7 +88,7 @@ request goes through the backend relay. The relay is **stateless and dumb**:
 
 - **Commit pinning:** entity refs pin a git commit SHA; a repo can't swap code under a
   pinned ref without the SHA changing.
-- **Bundle hash (SRI):** a workspace/lock records the integrity hash of each tool bundle;
+- **Bundle hash (SRI):** a toolchain/lock records the integrity hash of each tool bundle;
   on load the host verifies the fetched bundle matches — a compromised CDN/repo fails the
   check instead of running.
 

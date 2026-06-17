@@ -23,7 +23,7 @@ commit than what I've pinned?"
    for new commits / new entities.
 3. **Surface updates passively.** A quiet "N updates available" affordance; applied only
    on user accept. Never a blocking refetch, never a silent version change. (This is the
-   same update step the workspace loader uses.)
+   same update step the toolchain loader uses.)
 
 ## Caching
 
