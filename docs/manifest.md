@@ -7,7 +7,7 @@ branch/HEAD is the **mutable pointer**; a specific commit is the **immutable pin
 
 ## Shape
 
-A repo declares **entities**. Two kinds today — `tool` (code) and `workspace`
+A repo declares **entities**. Two kinds today — `tool` (code) and `toolchain`
 (composition) — in one array so they're addressed uniformly by `id`.
 
 ```jsonc
@@ -72,7 +72,7 @@ A repo declares **entities**. Two kinds today — `tool` (code) and `workspace`
 
     {
       "id": "json-pipeline",
-      "kind": "workspace",
+      "kind": "toolchain",
       "name": "JSON Pipeline",
       "visibility": "public",
       // each instance has a local handle so the same tool can appear twice
@@ -97,7 +97,7 @@ A repo declares **entities**. Two kinds today — `tool` (code) and `workspace`
 | Field | Req | Notes |
 |---|---|---|
 | `id` | ✓ | Unique within the repo, kebab-case. Stable — refs depend on it |
-| `kind` | ✓ | `"tool"` \| `"workspace"` (discriminator) |
+| `kind` | ✓ | `"tool"` \| `"toolchain"` (discriminator) |
 | `name` | ✓ | Display name |
 | `description` | – | Shown in palette + discovery |
 | `icon` | – | Icon name, emoji, or repo-relative path |
@@ -114,14 +114,14 @@ A repo declares **entities**. Two kinds today — `tool` (code) and `workspace`
 | `permissions.secrets` | – | secret names the tool may request |
 | `permissions.net` | – | `{ domain, inject? }[]`; `inject` binds a secret the host attaches |
 
-### `kind: "workspace"`
+### `kind: "toolchain"`
 | Field | Req | Notes |
 |---|---|---|
 | `tools` | ✓ | `{ instance, ref, source }[]`. `instance` is a local handle; `ref` is a tool id; `source` resolves it |
 | `layout` | ✓ | Split tree referencing `instance` handles |
 | `wires` | – | `{ from:[instance,port], to:[instance,port] }[]`; type-checked against ports |
 
-### `source` grammar (workspace tool refs)
+### `source` grammar (toolchain tool refs)
 - `"self"` — an entity in this same manifest
 - `"gh:owner/repo@ref"` — GitHub; `ref` is a commit (pinned) or branch (floating)
 - `"git+https://host/path.git#ref"` — generic git fallback

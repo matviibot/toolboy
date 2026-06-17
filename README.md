@@ -9,6 +9,10 @@ a git repo. toolboy reads a manifest and loads them.
 
 ## Principles
 
+- **Rails, not walls.** The host/tool boundary is rigid and opinionated — one
+  execution model, one capability path, one entity model, no unsafe variants. Behind
+  that boundary, a tool is free to do anything. The spec lives in
+  [docs/principles.md](docs/principles.md).
 - **Local-first.** Installable PWA, state in IndexedDB, works offline. No account
   required to use it.
 - **The shell is a frame, not a framework.** toolboy provides the surface, palette,
@@ -23,10 +27,10 @@ a git repo. toolboy reads a manifest and loads them.
 | Decision | Choice |
 |---|---|
 | Form factor | Local-first PWA (Tauri wrap possible later for a true global hotkey) |
-| Tool format | Component modules against `@toolboy/sdk`, loaded via dynamic `import()` |
-| Untrusted (public) tools | Run in a **sandboxed iframe** + postMessage bridge — no access to host data unless granted |
+| Tool format | Built ESM bundles against `@toolboy/sdk` — **one contract for every tool**, yours or a stranger's |
+| Execution | **Every** tool runs in a cross-origin sandboxed iframe; the SDK `ctx` is the *only* way a tool reaches anything outside its frame |
 | Split screen | Up to **N** resizable glass panes; tools pass data via a typed **bus** (last-value sticky, whitelist coercion) |
-| Entities | toolboy loads **entities** from a repo manifest. Two kinds today: **tools** (code) and **workspaces** (a composition of tools + layout + wiring). Both are first-class and handled uniformly: id, `visibility`, cross-repo refs, commit-pinned |
+| Entities | toolboy loads **entities** from a repo manifest. Two kinds today: **tools** (code) and **toolchains** (a composition of tools + layout + wiring). Both are first-class and handled uniformly: id, `visibility`, cross-repo refs, commit-pinned |
 | Tool authoring | **External only** — entities are defined in a repo's `toolboy.json`, not authored inside toolboy |
 | Sharing | Git repo + `toolboy.json` manifest listing entities, each with `visibility`. Loading = point toolboy at a repo |
 | Security | **Sandbox-by-default.** Every tool runs in a cross-origin sandboxed iframe; capabilities (storage/secrets/net/bus) are postMessage-mediated by the host. In-process is an explicit trust upgrade. Secrets never reach tool code |
