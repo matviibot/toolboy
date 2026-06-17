@@ -1,7 +1,10 @@
 # Loading, caching & updates
 
-Status: **design draft**. toolboy is online-primary but local-first; the model is
-**stale-while-revalidate**, which is correct *because* entities are commit-pinned.
+Status: **partially implemented** — fetch + SRI-verify + content-addressed bundle
+cache + offline manifest fallback are live in `src/loader/`; background revalidation
+(the poll → "updates available") is still to come. toolboy is online-primary but
+local-first; the model is **stale-while-revalidate**, correct *because* entities are
+commit-pinned.
 
 ## Mutable pointer vs. immutable pin
 

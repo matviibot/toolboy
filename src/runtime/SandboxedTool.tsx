@@ -7,7 +7,6 @@
 import { useEffect, useMemo, useRef } from "react";
 import { ToolBridge } from "./host";
 import { buildSrcdoc } from "./srcdoc";
-import { TOOL_SOURCES } from "./tools";
 import type { ThemePayload } from "./protocol";
 import type { Tool } from "../shell/types";
 
@@ -43,8 +42,7 @@ export function SandboxedTool({ tool, input, theme, onOutput, onToast }: Sandbox
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const bridgeRef = useRef<ToolBridge | null>(null);
 
-  const source = TOOL_SOURCES[tool.interior];
-  const srcDoc = useMemo(() => buildSrcdoc(source ?? "/* missing tool source */"), [source]);
+  const srcDoc = useMemo(() => buildSrcdoc(tool.source || "/* missing tool source */"), [tool.source]);
 
   // latest callbacks/input without re-running the bridge-setup effect
   const onOutputRef = useRef(onOutput);

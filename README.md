@@ -64,21 +64,31 @@ npm run build      # typecheck + production build
 - `src/components/` — the design-system primitives (`Glass`, `Button`, `Kbd`,
   `Badge`, `Input`, `EntityRow`, `OriginBadge`, `Port`, `PermissionLine`, `Icon`).
 - `src/shell/` — the surface: `Palette` (⌘K), `Panes` (split + wires), `Trust`
-  (permission + secret chrome), `data`.
+  (permission + secret chrome).
+- `src/loader/` — the **manifest loader**: fetch a repo's `toolboy.json`, validate
+  it, SRI-verify each tool bundle, cache it content-addressed, and produce the
+  shell's entities. Git source (`gh:owner/repo@ref`, commit-pinned) + a same-origin
+  resolver for the bundled registry. See [docs/manifest.md](docs/manifest.md) and
+  [docs/loading.md](docs/loading.md).
 - `src/runtime/` — the **boundary**: tools run for real in cross-origin sandboxed
   iframes, with `ctx` (storage / secrets / net / bus / ui) proxied over a
   MessagePort the host mediates. See [docs/runtime.md](docs/runtime.md).
-- `src/App.tsx` — orchestrator: theme, panes, wiring, palette, trust gate.
+- `public/registry/` — the bundled demo registry the app boots from: a real
+  `toolboy.json` + the tool bundles, each with a verified SRI hash.
+- `src/App.tsx` — orchestrator: boot/load, theme, panes, wiring, palette, trust gate.
 
-> The runtime boundary is implemented: every tool — yours or a stranger's — runs
-> in an opaque-origin iframe with `connect-src 'none'` and reaches the world only
-> through `ctx`. The bundled tools (`src/runtime/tools/`) are real tools authored
-> against that contract, not React stand-ins. Still product runtime, not visual
-> design: the registry/discovery backend and the `net` relay fallback are next.
+> The registry is the source of truth: entities are loaded from `toolboy.json` at
+> boot, not hardcoded. Each tool bundle is fetched, SRI-verified (a tampered bundle
+> is rejected, never run), and content-addressed for offline. Every tool then runs
+> in an opaque-origin sandboxed iframe with `connect-src 'none'`, reaching the world
+> only through `ctx`. The bundled tools are real tools authored against that contract.
 
 ## Status
 
-Runtime boundary implemented — sandboxed iframes + the host-mediated `ctx` bridge
-(storage, secrets, net allowlist + injection, bus, ui), exercised by the bundled
-demo tools. Next: the git manifest loader and the registry/`net`-relay backend.
-SDK contract — see [docs/sdk.md](docs/sdk.md) and [docs/runtime.md](docs/runtime.md).
+Manifest loader + runtime boundary implemented. Entities load from a git
+`toolboy.json` (fetch → validate → SRI-verify → content-addressed cache → render);
+tools run in sandboxed iframes behind the host-mediated `ctx` bridge (storage,
+secrets, net allowlist + injection, bus, ui). The bundled `public/registry/` is the
+boot source; the `gh:` resolver pins to a commit. Next: the registry/discovery
+backend, the `net` relay fallback, and background revalidation (stale-while-revalidate
+poll → the "updates available" affordance). See [docs/](docs/).

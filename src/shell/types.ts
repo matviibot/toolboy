@@ -27,7 +27,8 @@ export interface Tool {
   origin: Origin;
   ports: { accepts: PortSpec[]; provides: PortSpec[] };
   perms: Perms;
-  interior: "color" | "fetcher" | "jq" | "jsonview" | "foreign" | "foreign2";
+  /** the verified tool bundle text, fetched by the loader and run in the sandbox */
+  source: string;
 }
 
 export interface Toolchain {
