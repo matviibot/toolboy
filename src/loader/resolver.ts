@@ -49,8 +49,11 @@ export async function resolveSource(src: Source): Promise<Resolved> {
   // The commits API accepts a branch, tag, OR a sha and echoes back the sha, so we
   // never assume a hex-looking ref is already a commit (a branch named like a hash
   // would otherwise be used unpinned and 404 the raw fetch).
+  // resolving the ref → commit IS the mutable-pointer poll; read it fresh so a new
+  // commit on the branch is actually seen (a cached SHA would pin us to the past).
   const res = await fetch(`https://api.github.com/repos/${src.owner}/${src.repo}/commits/${src.ref}`, {
     headers: { Accept: "application/vnd.github.sha" },
+    cache: "no-store",
   });
   if (!res.ok) throw new Error(`could not resolve ${src.owner}/${src.repo}@${src.ref}: ${res.status}`);
   const commit = (await res.text()).trim();

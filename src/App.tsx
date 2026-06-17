@@ -2,11 +2,11 @@
    trust chrome. Entities are loaded from a git manifest (toolboy.json) at boot —
    the registry is the source of truth, not a hardcoded dataset. Home → palette →
    tool / toolchain → split → wire → trust. */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { Glass, IconButton, Kbd, Icon } from "./components";
+import { Button, Glass, IconButton, Kbd, Icon } from "./components";
 import markUrl from "./assets/logo/toolboy-mark.svg";
-import { aggregatePerms, loadRegistry, type LoadedRegistry, type LoadIssue } from "./loader/load";
+import { aggregatePerms, loadRegistry, revalidate, type LoadedRegistry, type LoadIssue, type RegistryUpdate } from "./loader/load";
 import { keyring } from "./runtime/keyring";
 import { originColors } from "./shell/origin";
 import type { AggPerms, Entity, Pane, Perms, Wire } from "./shell/types";
@@ -91,6 +91,63 @@ function HomeSurface({ entities, onOpen }: { entities: Entity[]; onOpen: (e: Ent
   );
 }
 
+/** Passive "updates available" affordance (loading.md): a quiet pill that opens a
+    popover listing what changed. Never auto-applies — the swap happens only on accept. */
+function UpdateBanner({ update, onApply, onDismiss }: { update: RegistryUpdate; onApply: () => void; onDismiss: () => void }) {
+  const [open, setOpen] = useState(false);
+  const { added, changed, removed } = update.summary;
+  const n = added.length + changed.length + removed.length;
+
+  const line = (label: string, names: string[], color: string) =>
+    names.length === 0 ? null : (
+      <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+        <span style={{ font: "var(--type-caption)", color, flex: "none", width: 52 }}>{label}</span>
+        <span style={{ font: "var(--type-caption)", color: "var(--fg-2)" }}>{names.join(", ")}</span>
+      </div>
+    );
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={() => setOpen((o) => !o)}
+        style={{
+          display: "inline-flex", alignItems: "center", gap: 8, padding: "6px 12px",
+          borderRadius: "var(--radius-pill)", cursor: "pointer",
+          background: "var(--glass-fill-strong)", border: "1px solid var(--glass-stroke)",
+          backdropFilter: "blur(var(--blur-sm))", WebkitBackdropFilter: "blur(var(--blur-sm))",
+          boxShadow: "var(--shadow-1)", font: "var(--type-label)", color: "var(--fg-1)",
+        }}
+      >
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--accent)", animation: "tbPulse 1.6s var(--ease-in-out) infinite" }} />
+        <Icon name="download" size={15} />
+        {n} update{n === 1 ? "" : "s"} available
+      </button>
+
+      {open && (
+        <Glass elevation="popover" style={{ position: "absolute", top: "calc(100% + 8px)", right: 0, width: 308, padding: 16, display: "flex", flexDirection: "column", gap: 12, animation: "tbFade var(--dur-base) var(--ease-out)" }}>
+          <div style={{ font: "var(--type-label)", color: "var(--fg-1)" }}>Tools changed upstream</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {line("New", added, "var(--ok)")}
+            {line("Updated", changed, "var(--accent)")}
+            {line("Removed", removed, "var(--danger)")}
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
+            <Button variant="primary" size="sm" iconLeft={<Icon name="check" size={15} />} onClick={() => { setOpen(false); onApply(); }} style={{ flex: 1 }}>
+              Update now
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => { setOpen(false); onDismiss(); }}>
+              Dismiss
+            </Button>
+          </div>
+          <div style={{ font: "var(--type-caption)", color: "var(--fg-4)" }}>
+            Pinned to {update.pin.slice(0, 11)} · applied only when you accept
+          </div>
+        </Glass>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const [registry, setRegistry] = useState<LoadedRegistry | null>(null);
@@ -100,6 +157,7 @@ export default function App() {
   const [wires, setWires] = useState<Wire[]>([]);
   const [palette, setPalette] = useState<PaletteState>(false);
   const [trust, setTrust] = useState<TrustState | null>(null);
+  const [update, setUpdate] = useState<RegistryUpdate | null>(null);
   const [toasts, setToasts] = useState<{ id: number; message: string; tone: "info" | "success" | "error" }[]>([]);
 
   const pushToast = useCallback((message: string, tone: "info" | "success" | "error") => {
@@ -123,6 +181,56 @@ export default function App() {
       .catch((err) => { if (live) setBootError(err instanceof Error ? err.message : String(err)); });
     return () => { live = false; };
   }, []);
+
+  // background revalidation (loading.md): while online + visible, poll the source's
+  // mutable pointer for something newer than the pinned bytes we're running. A hit is
+  // surfaced passively via UpdateBanner; it's never applied until the user accepts.
+  const updatePin = useRef<string | null>(null);   // pin currently surfaced (don't re-set it)
+  const dismissedPin = useRef<string | null>(null); // pin the user waved off (don't re-prompt)
+  const polling = useRef(false);                    // in-flight guard — no overlapping polls
+  useEffect(() => { updatePin.current = update?.pin ?? null; }, [update]);
+  useEffect(() => {
+    if (!registry) return;
+    let live = true;
+    const poll = async () => {
+      if (polling.current || !navigator.onLine || document.visibilityState !== "visible") return;
+      polling.current = true;
+      try {
+        const found = await revalidate(registry, (i) => console.warn(`[toolboy] update skipped "${i.id}": ${i.reason}`));
+        if (!live || !found) return;
+        if (found.pin === dismissedPin.current || found.pin === updatePin.current) return;
+        setUpdate(found);
+      } catch (err) {
+        console.warn("[toolboy] revalidate failed:", err instanceof Error ? err.message : err);
+      } finally {
+        polling.current = false;
+      }
+    };
+    const id = window.setInterval(poll, 5 * 60_000);
+    const onVisible = () => { if (document.visibilityState === "visible") poll(); };
+    window.addEventListener("online", poll);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+      window.removeEventListener("online", poll);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [registry]);
+
+  const applyUpdate = useCallback(async () => {
+    if (!update) return;
+    await update.commit();          // promote the new pointer so the next boot starts here
+    dismissedPin.current = null;
+    setRegistry(update.registry);   // swap in the prepared, bundle-verified registry
+    setUpdate(null);
+    pushToast("Tools updated", "success");
+  }, [update, pushToast]);
+
+  const dismissUpdate = useCallback(() => {
+    if (update) dismissedPin.current = update.pin;
+    setUpdate(null);
+  }, [update]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -226,6 +334,7 @@ export default function App() {
       {/* corner: theme */}
       {booted && (
         <div style={{ position: "absolute", top: 16, right: 18, display: "flex", alignItems: "center", gap: 10, zIndex: "var(--z-header)" } as CSSProperties}>
+          {update && <UpdateBanner update={update} onApply={applyUpdate} onDismiss={dismissUpdate} />}
           <IconButton label="Open command palette" onClick={() => setPalette("open")}><Icon name="command" size={17} /></IconButton>
           <IconButton label="Toggle theme" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
             <Icon name={theme === "dark" ? "sun" : "moon"} size={17} />

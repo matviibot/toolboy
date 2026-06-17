@@ -1,8 +1,8 @@
 # Loading, caching & updates
 
-Status: **partially implemented** — fetch + SRI-verify + content-addressed bundle
-cache + offline manifest fallback are live in `src/loader/`; background revalidation
-(the poll → "updates available") is still to come. toolboy is online-primary but
+Status: **implemented** — fetch + SRI-verify + content-addressed bundle cache, offline
+manifest fallback, *and* background revalidation (the poll → "updates available"
+affordance) are live in `src/loader/` + `src/App.tsx`. toolboy is online-primary but
 local-first; the model is **stale-while-revalidate**, correct *because* entities are
 commit-pinned.
 
@@ -22,11 +22,17 @@ commit than what I've pinned?"
 
 1. **Serve from cache instantly.** Launching toolboy and opening tools touches no network
    on the critical path — bundles are served from the local content-addressed cache.
-2. **Revalidate in the background.** While online, poll connected repos' mutable pointers
-   for new commits / new entities.
-3. **Surface updates passively.** A quiet "N updates available" affordance; applied only
-   on user accept. Never a blocking refetch, never a silent version change. (This is the
-   same update step the toolchain loader uses.)
+2. **Revalidate in the background.** While online *and* the tab is visible, poll connected
+   repos' mutable pointers for new commits / new entities (`revalidate()`, on an interval +
+   on regaining visibility/connectivity). The poll reads the pointer with `cache: "no-store"`
+   — a moved pointer must never be masked by the HTTP cache. The github resolver re-reads the
+   ref → commit SHA; a same-origin (static) source's pointer is the manifest's own content
+   hash. The new bundles are fetched + SRI-verified up front so accepting is instant.
+3. **Surface updates passively.** A quiet "N updates available" affordance (`UpdateBanner`)
+   listing what changed (added / updated / removed); applied only on user accept, and a
+   dismissed pin is not re-prompted until a newer one appears. Never a blocking refetch,
+   never a silent version change — the manifest pointer is promoted to the cache only on
+   accept. (This is the same update step the toolchain loader uses.)
 
 ## Caching
 
