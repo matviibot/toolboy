@@ -1,14 +1,19 @@
 /* toolboy surface — App orchestrator. Owns theme, panes, wires, palette, and the
-   trust chrome. Home → palette → tool / toolchain → split → wire → trust. */
+   trust chrome. Entities are loaded from a git manifest (toolboy.json) at boot —
+   the registry is the source of truth, not a hardcoded dataset. Home → palette →
+   tool / toolchain → split → wire → trust. */
 import { useCallback, useEffect, useState } from "react";
 import type { CSSProperties } from "react";
 import { Glass, IconButton, Kbd, Icon } from "./components";
 import markUrl from "./assets/logo/toolboy-mark.svg";
-import * as DATA from "./shell/data";
+import { aggregatePerms, loadRegistry, type LoadedRegistry, type LoadIssue } from "./loader/load";
 import type { AggPerms, Entity, Pane, Perms, Wire } from "./shell/types";
 import { Palette } from "./shell/Palette";
 import { SplitSurface } from "./shell/Panes";
 import { TrustDialog, type TrustSubject } from "./shell/Trust";
+
+/** the manifest the app boots from — the bundled demo registry, served same-origin */
+const BOOT_SOURCE = "self";
 
 let UID = 1;
 const mkPane = (toolId: string, input: unknown = null): Pane => ({ uid: "p" + UID++, toolId, input, lastOutput: null });
@@ -23,8 +28,19 @@ interface TrustState {
   action: () => void;
 }
 
-function HomeSurface({ onOpen }: { onOpen: (e: Entity, split: boolean) => void }) {
-  const pinned: Entity[] = [DATA.chains["json-pipeline"], DATA.tools.jq, DATA.tools.color, DATA.tools.summarize];
+function BootSurface({ error }: { error: string | null }) {
+  return (
+    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18 }}>
+      <img src={markUrl} width={64} height={64} alt="toolboy" style={{ filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.35))", animation: error ? "none" : "tbPulse 1.6s var(--ease-in-out) infinite" }} />
+      <div style={{ font: "var(--type-body)", color: error ? "var(--danger)" : "var(--fg-3)", textAlign: "center", maxWidth: 420 }}>
+        {error ? `Couldn't load your toolbox — ${error}` : "Loading your toolbox…"}
+      </div>
+    </div>
+  );
+}
+
+function HomeSurface({ entities, onOpen }: { entities: Entity[]; onOpen: (e: Entity, split: boolean) => void }) {
+  const pinned = entities.slice(0, 6);
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28, animation: "tbFade var(--dur-slow) var(--ease-out)" }}>
       <img src={markUrl} width={76} height={76} alt="toolboy" style={{ filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.35))" }} />
@@ -57,12 +73,13 @@ function HomeSurface({ onOpen }: { onOpen: (e: Entity, split: boolean) => void }
 
 export default function App() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [registry, setRegistry] = useState<LoadedRegistry | null>(null);
+  const [bootError, setBootError] = useState<string | null>(null);
   const [panes, setPanes] = useState<Pane[]>([]);
   const [sizes, setSizes] = useState<number[]>([]);
   const [wires, setWires] = useState<Wire[]>([]);
   const [palette, setPalette] = useState<PaletteState>(false);
   const [trust, setTrust] = useState<TrustState | null>(null);
-  const [updates, setUpdates] = useState(true);
   const [toasts, setToasts] = useState<{ id: number; message: string; tone: "info" | "success" | "error" }[]>([]);
 
   const pushToast = useCallback((message: string, tone: "info" | "success" | "error") => {
@@ -72,6 +89,20 @@ export default function App() {
   }, []);
 
   useEffect(() => { document.documentElement.setAttribute("data-theme", theme); }, [theme]);
+
+  // boot: load the registry from its git manifest
+  useEffect(() => {
+    let live = true;
+    const issues: LoadIssue[] = [];
+    loadRegistry(BOOT_SOURCE, (i) => issues.push(i))
+      .then((reg) => {
+        if (!live) return;
+        setRegistry(reg);
+        issues.forEach((i) => console.warn(`[toolboy] skipped "${i.id}": ${i.reason}`));
+      })
+      .catch((err) => { if (live) setBootError(err instanceof Error ? err.message : String(err)); });
+    return () => { live = false; };
+  }, []);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -93,7 +124,7 @@ export default function App() {
   }, []);
 
   const openToolchain = useCallback((chain: Extract<Entity, { kind: "toolchain" }>) => {
-    const ps = chain.tools.map((tid) => mkPane(tid, tid === "jq" ? { name: "toolboy", stars: 128, open_issues: 7 } : null));
+    const ps = chain.tools.map((tid) => mkPane(tid, null));
     const idByTool: Record<string, string> = {};
     chain.tools.forEach((tid, i) => { idByTool[tid] = ps[i].uid; });
     const ws: Wire[] = chain.wires.map(([a, b]) => ({ from: idByTool[a], to: idByTool[b] }));
@@ -102,6 +133,7 @@ export default function App() {
 
   // pick from palette / home
   const pick = useCallback((entity: Entity, split: boolean) => {
+    if (!registry) return;
     setPalette((cur) => {
       const splitFrom = typeof cur === "object" && cur && "splitFrom" in cur;
       const doOpen = () => {
@@ -109,7 +141,7 @@ export default function App() {
         if (splitFrom || split) addPane(entity.id); else openSingle(entity.id, null);
       };
       // trust gate: public entities, toolchains, or anything needing secrets
-      const perms: Perms | AggPerms = entity.kind === "toolchain" ? DATA.aggregatePerms(entity) : entity.perms;
+      const perms: Perms | AggPerms = entity.kind === "toolchain" ? aggregatePerms(entity, registry.toolsById) : entity.perms;
       const needsTrust = entity.origin === "public" || entity.kind === "toolchain" || (perms.secrets && perms.secrets.length > 0);
       if (needsTrust) {
         setTrust({
@@ -123,7 +155,7 @@ export default function App() {
       }
       return false; // close palette
     });
-  }, [openSingle, addPane, openToolchain]);
+  }, [registry, openSingle, addPane, openToolchain]);
 
   const onOutput = useCallback((uid: string, value: unknown) => {
     setPanes((ps) => {
@@ -140,16 +172,17 @@ export default function App() {
     setWires((ws) => (ws.some((w) => w.from === fromUid && w.to === toUid) ? ws : [...ws, { from: fromUid, to: toUid }]));
     setPanes((ps) => {
       const src = ps.find((p) => p.uid === fromUid);
-      const seed = src && src.lastOutput != null ? src.lastOutput : { from: src ? DATA.tools[src.toolId].name : "?" };
+      const seed = src && src.lastOutput != null ? src.lastOutput : { from: src && registry ? registry.toolsById[src.toolId]?.name ?? "?" : "?" };
       return ps.map((p) => (p.uid === toUid ? { ...p, input: seed } : p));
     });
-  }, []);
+  }, [registry]);
 
   const closePane = useCallback((uid: string) => {
     setPanes((ps) => { const next = ps.filter((p) => p.uid !== uid); setSizes(equalize(next.length)); return next; });
     setWires((ws) => ws.filter((w) => w.from !== uid && w.to !== uid));
   }, []);
 
+  const booted = !!registry;
   const home = panes.length === 0;
 
   return (
@@ -157,31 +190,29 @@ export default function App() {
       {/* corner: app mark */}
       <div style={{ position: "absolute", top: 18, left: 20, display: "flex", alignItems: "center", gap: 9, zIndex: "var(--z-header)" } as CSSProperties}>
         <img src={markUrl} width={26} height={26} alt="" style={{ cursor: "pointer" }} onClick={() => { setPanes([]); setWires([]); }} />
-        {!home && <span style={{ font: "var(--type-label)", color: "var(--fg-2)" }}>toolboy</span>}
+        {booted && !home && <span style={{ font: "var(--type-label)", color: "var(--fg-2)" }}>toolboy</span>}
       </div>
 
-      {/* corner: updates + theme */}
-      <div style={{ position: "absolute", top: 16, right: 18, display: "flex", alignItems: "center", gap: 10, zIndex: "var(--z-header)" } as CSSProperties}>
-        {updates && (
-          <button onClick={() => setUpdates(false)}
-            style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 11px", borderRadius: "var(--radius-pill)", background: "var(--glass-fill)", border: "1px solid var(--glass-stroke)", backdropFilter: "blur(var(--blur-sm))", color: "var(--fg-2)", cursor: "pointer", font: "var(--type-caption)", boxShadow: "var(--shadow-1)" }}>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--warn)" }} />
-            2 updates available
-          </button>
-        )}
-        <IconButton label="Open command palette" onClick={() => setPalette("open")}><Icon name="command" size={17} /></IconButton>
-        <IconButton label="Toggle theme" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
-          <Icon name={theme === "dark" ? "sun" : "moon"} size={17} />
-        </IconButton>
-      </div>
+      {/* corner: theme */}
+      {booted && (
+        <div style={{ position: "absolute", top: 16, right: 18, display: "flex", alignItems: "center", gap: 10, zIndex: "var(--z-header)" } as CSSProperties}>
+          <IconButton label="Open command palette" onClick={() => setPalette("open")}><Icon name="command" size={17} /></IconButton>
+          <IconButton label="Toggle theme" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
+            <Icon name={theme === "dark" ? "sun" : "moon"} size={17} />
+          </IconButton>
+        </div>
+      )}
 
       {/* surface body */}
-      {home ? (
-        <HomeSurface onOpen={pick} />
+      {!booted ? (
+        <BootSurface error={bootError} />
+      ) : home ? (
+        <HomeSurface entities={registry.all} onOpen={pick} />
       ) : (
         <div style={{ position: "absolute", inset: 0, padding: "62px 20px 20px", boxSizing: "border-box" }}>
           <SplitSurface
             panes={panes}
+            toolsById={registry.toolsById}
             wires={wires}
             sizes={sizes}
             onResize={setSizes}
@@ -195,7 +226,7 @@ export default function App() {
         </div>
       )}
 
-      {palette && <Palette entities={DATA.all} onClose={() => setPalette(false)} onPick={pick} />}
+      {palette && registry && <Palette entities={registry.all} onClose={() => setPalette(false)} onPick={pick} />}
 
       {trust && (
         <TrustDialog

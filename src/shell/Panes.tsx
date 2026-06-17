@@ -6,7 +6,6 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Glass, IconButton, OriginBadge, Icon } from "../components";
-import { tools as TOOLS } from "./data";
 import type { Pane, Tool, Wire } from "./types";
 import { SandboxedTool } from "../runtime/SandboxedTool";
 
@@ -144,6 +143,7 @@ function PaneHeader({ tool, onSplit, onClose, single }: { tool: Tool; onSplit: (
 
 export interface SplitSurfaceProps {
   panes: Pane[];
+  toolsById: Record<string, Tool>;
   wires: Wire[];
   sizes: number[];
   onResize: (sizes: number[]) => void;
@@ -155,7 +155,7 @@ export interface SplitSurfaceProps {
   onToast: (message: string, tone: "info" | "success" | "error") => void;
 }
 
-export function SplitSurface({ panes, wires, sizes, onResize, onClose, onSplit, onSend, onOutput, theme, onToast }: SplitSurfaceProps) {
+export function SplitSurface({ panes, toolsById, wires, sizes, onResize, onClose, onSplit, onSend, onOutput, theme, onToast }: SplitSurfaceProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [tick, setTick] = useState(0);
   const bump = () => setTick((t) => t + 1);
@@ -263,7 +263,7 @@ export function SplitSurface({ panes, wires, sizes, onResize, onClose, onSplit, 
   return (
     <div ref={containerRef} style={{ position: "relative", display: "flex", width: "100%", height: "100%", gap: 0 }}>
       {panes.map((pane, i) => {
-        const tool = TOOLS[pane.toolId];
+        const tool = toolsById[pane.toolId];
         const out = tool.ports.provides[0];
         const inp = tool.ports.accepts[0];
         const incoming = incomingSet.has(pane.uid);

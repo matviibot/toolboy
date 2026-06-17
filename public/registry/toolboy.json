@@ -1,0 +1,142 @@
+{
+  "$schema": "https://toolboy.app/schema/v1.json",
+  "manifestVersion": 1,
+
+  "repo": {
+    "name": "toolboy-demo",
+    "description": "Bundled demo registry — the tools toolboy boots with",
+    "defaults": { "visibility": "private" }
+  },
+
+  "entities": [
+    {
+      "id": "color",
+      "kind": "tool",
+      "name": "Color Picker",
+      "description": "Pick & convert colors",
+      "icon": "pipette",
+      "tags": ["color", "design"],
+      "entry": "tools/color.js",
+      "integrity": "sha384-eFYK/xS1vUhK3xZCZiq81k/lAlVgWemdtba2Ofdj43kymU+1NcWq0HubakLwyFIs",
+      "ports": { "accepts": [], "provides": [{ "id": "out", "type": "x-toolboy/color" }] },
+      "permissions": { "storage": true, "secrets": [], "net": [] }
+    },
+    {
+      "id": "fetcher",
+      "kind": "tool",
+      "name": "Fetcher",
+      "description": "GET a URL, emit the body",
+      "icon": "download",
+      "tags": ["http", "fetch", "json"],
+      "entry": "tools/fetcher.js",
+      "integrity": "sha384-ufttWsPI1cESaDQN+9mgb5jdN33pDdgarF68bqJHc2qBkt3FhrwJ423yrs8aSMDy",
+      "ports": {
+        "accepts": [{ "id": "in", "type": "text/plain" }],
+        "provides": [{ "id": "out", "type": "application/json" }]
+      },
+      "permissions": { "storage": false, "secrets": [], "net": [{ "domain": "api.github.com" }] }
+    },
+    {
+      "id": "jq",
+      "kind": "tool",
+      "name": "jq",
+      "description": "Filter and transform JSON",
+      "icon": "braces",
+      "tags": ["json", "transform"],
+      "entry": "tools/jq.js",
+      "integrity": "sha384-qwVSIiz3PPyTYqbSc38NJaHguQjfLjjtJwSl5SoBevmaevhKnLwMj6ITg9kmX2t3",
+      "ports": {
+        "accepts": [{ "id": "in", "type": "application/json" }],
+        "provides": [{ "id": "out", "type": "application/json" }]
+      },
+      "permissions": { "storage": true, "secrets": [], "net": [] }
+    },
+    {
+      "id": "json-view",
+      "kind": "tool",
+      "name": "JSON View",
+      "description": "Inspect JSON as a tree",
+      "icon": "list-tree",
+      "tags": ["json", "inspect"],
+      "entry": "tools/jsonview.js",
+      "integrity": "sha384-kvW1wGmUELJ0LzUy8ETeZm5IT6QgtgUuwCKiNOEJM5+LWwqUrRFQRpyvhMtve7hU",
+      "ports": { "accepts": [{ "id": "in", "type": "application/json" }], "provides": [] },
+      "permissions": { "storage": false, "secrets": [], "net": [] }
+    },
+    {
+      "id": "summarize",
+      "kind": "tool",
+      "name": "Summarize",
+      "description": "From matvii/shared · needs a key",
+      "icon": "sparkles",
+      "tags": ["ai", "text", "summary"],
+      "visibility": "public",
+      "entry": "tools/summarize.js",
+      "integrity": "sha384-jrRjzCLg7ylCeYno7Cg2pxBfvOT25lwBYC1UZLm1YM/H+NxpQm6M5wudPD60TeFJ",
+      "ports": {
+        "accepts": [{ "id": "in", "type": "text/plain" }],
+        "provides": [{ "id": "out", "type": "text/plain" }]
+      },
+      "permissions": {
+        "storage": false,
+        "secrets": ["OPENAI_API_KEY"],
+        "net": [
+          { "domain": "api.openai.com", "inject": { "secret": "OPENAI_API_KEY", "header": "Authorization", "format": "Bearer {}" } }
+        ]
+      }
+    },
+    {
+      "id": "regex",
+      "kind": "tool",
+      "name": "Regex Lab",
+      "description": "Test patterns against text",
+      "icon": "regex",
+      "tags": ["regex", "text"],
+      "visibility": "public",
+      "entry": "tools/regex.js",
+      "integrity": "sha384-chca+GcPwhpvMZCEoCqbyaVlpNtcotjUmRP9TJk4I9nau3wCCdP1eQmBqguy+SNf",
+      "ports": {
+        "accepts": [{ "id": "in", "type": "text/plain" }],
+        "provides": [{ "id": "out", "type": "text/plain" }]
+      },
+      "permissions": { "storage": true, "secrets": [], "net": [] }
+    },
+
+    {
+      "id": "json-pipeline",
+      "kind": "toolchain",
+      "name": "JSON Pipeline",
+      "description": "fetch → jq → view",
+      "icon": "workflow",
+      "tools": [
+        { "instance": "a", "ref": "fetcher", "source": "self" },
+        { "instance": "b", "ref": "jq", "source": "self" },
+        { "instance": "c", "ref": "json-view", "source": "self" }
+      ],
+      "layout": { "type": "split", "dir": "row", "children": ["a", "b", "c"] },
+      "wires": [
+        { "from": ["a", "out"], "to": ["b", "in"] },
+        { "from": ["b", "out"], "to": ["c", "in"] }
+      ]
+    },
+    {
+      "id": "triage",
+      "kind": "toolchain",
+      "name": "Inbox Triage",
+      "description": "From acme/scenes · 4 tools",
+      "icon": "workflow",
+      "visibility": "public",
+      "tools": [
+        { "instance": "a", "ref": "fetcher", "source": "self" },
+        { "instance": "b", "ref": "summarize", "source": "self" },
+        { "instance": "c", "ref": "regex", "source": "self" },
+        { "instance": "d", "ref": "json-view", "source": "self" }
+      ],
+      "layout": { "type": "split", "dir": "row", "children": ["a", "b", "c", "d"] },
+      "wires": [
+        { "from": ["a", "out"], "to": ["b", "in"] },
+        { "from": ["b", "out"], "to": ["c", "in"] }
+      ]
+    }
+  ]
+}

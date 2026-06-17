@@ -38,14 +38,17 @@ interface Storage {
 }
 
 interface Secrets {
-  // resolves only names declared in the manifest; prompts the user if missing
-  get(name: string): Promise<string | undefined>;
+  // existence only — for branching UI ("connect a key" vs. "run"). The raw value
+  // NEVER crosses into tool code; it's injected host-side into net requests (below).
+  // Only names declared in the manifest are acknowledged. See runtime.md / security.md.
+  has(name: string): Promise<boolean>;
 }
 
 interface Net {
   // tool frame has CSP connect-src 'none'; this call is bridged to the host, which
-  // injects declared secrets and fetches directly (CORS) or via the relay fallback.
-  // Restricted to manifest-declared domains.
+  // injects declared secrets (per the manifest net grant) and fetches directly (CORS)
+  // or via the relay fallback. Restricted to manifest-declared domains. The tool sends
+  // the request and reads the response — it never sees the injected key.
   fetch(input: string, init?: RequestInit): Promise<Response>;
 }
 
@@ -99,6 +102,10 @@ emphasized for public tools.
 - **Coercion = whitelist** (option c): quiet coercion only within a small safe set
   (e.g. `application/json` -> `text/plain`); anything outside requires an explicit
   adapter tool in the chain.
+- **Secrets expose `has`, not `get`.** An earlier draft sketched `secrets.get(): string`,
+  but principles.md and security.md are firm that secrets never enter tool code. Resolved
+  toward the rails: tools get only `has(name)`; the host injects the value into outbound
+  `net` requests. Implemented in [runtime.md](runtime.md).
 
 ## Open questions
 
