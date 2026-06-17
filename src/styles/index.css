@@ -1,0 +1,67 @@
+/* toolboy — global entry point. Import order: fonts → tokens → material → base. */
+@import "./fonts.css";
+@import "./colors.css";
+@import "./typography.css";
+@import "./spacing.css";
+@import "./glass.css";
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg-base);
+  font-family: var(--font-sans);
+  color: var(--fg-1);
+}
+
+#root {
+  height: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--glass-stroke);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* shell motion — fast, fluid, nothing bounces */
+@keyframes tbFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes tbPaletteIn {
+  from { opacity: 0; transform: translateY(-8px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+/* draw-on uses pathLength="1" normalization so wires of any length fully render */
+@keyframes tbWireDraw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* data pulse — a short dash travels output→input along the (pathLength=1) wire */
+@keyframes tbWireFlow {
+  from { stroke-dashoffset: 0.18; }
+  to { stroke-dashoffset: -1; }
+}
+@keyframes tbPortPulse {
+  0% { box-shadow: 0 0 0 0 var(--accent-ring); }
+  100% { box-shadow: 0 0 0 10px transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

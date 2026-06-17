@@ -1,0 +1,51 @@
+/* ============================================================================
+   toolboy — GLASS MATERIAL utilities
+   The codified recipe. Use these classes (or copy the recipe) for any frosted
+   surface. Depth comes from layered shadow + a top light-catch edge, never a
+   hard outline. backdrop-filter does the frosting; the fill keeps it legible.
+   ============================================================================ */
+
+/* Base frosted panel. */
+.tb-glass {
+  position: relative;
+  background: var(--glass-fill);
+  -webkit-backdrop-filter: blur(var(--blur-md)) saturate(var(--blur-saturate));
+  backdrop-filter: blur(var(--blur-md)) saturate(var(--blur-saturate));
+  border: var(--hairline) solid var(--glass-stroke);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-3), var(--shadow-inset);
+}
+
+/* The light-catching top edge — a 1px gradient hairline that reads as a bevel. */
+.tb-glass-edge::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: var(--hairline);
+  background: linear-gradient(
+    160deg,
+    var(--glass-stroke-hi) 0%,
+    transparent 32%,
+    transparent 68%,
+    var(--glass-stroke-lo) 100%
+  );
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Variants by elevation / blur strength */
+.tb-glass--card    { border-radius: var(--radius-lg); box-shadow: var(--shadow-2), var(--shadow-inset); }
+.tb-glass--popover { border-radius: var(--radius-xl); backdrop-filter: blur(var(--blur-xl)) saturate(var(--blur-saturate)); -webkit-backdrop-filter: blur(var(--blur-xl)) saturate(var(--blur-saturate)); box-shadow: var(--shadow-4), var(--shadow-inset); }
+.tb-glass--raised  { background: var(--glass-fill-strong); }
+
+/* Recessed well — inputs, secret fields, code areas */
+.tb-inset {
+  background: var(--glass-fill-inset);
+  border: var(--hairline) solid var(--glass-stroke-lo);
+  border-radius: var(--radius-md);
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.18);
+}

@@ -46,7 +46,33 @@ a git repo. toolboy reads a manifest and loads them.
 **Backend (from start):** Cloudflare Workers + D1 (registry/index) + KV (cache) —
 serves the `net` proxy, the discovery index, and publish. Edge, cheap, native `fetch`.
 
+## Develop
+
+The shell client (the visual surface — home, ⌘K palette, split panes + wiring,
+and the host trust chrome) is implemented from the design system in
+`src/`. It's a React + Vite + TypeScript app using the design tokens as CSS
+custom properties.
+
+```sh
+npm install
+npm run dev        # http://localhost:5173
+npm run build      # typecheck + production build
+```
+
+- `src/styles/` — the design tokens (`colors`, `typography`, `spacing`, `glass`,
+  `fonts`) + the global `index.css` entry. Self-hosted Hanken Grotesk + JetBrains Mono.
+- `src/components/` — the design-system primitives (`Glass`, `Button`, `Kbd`,
+  `Badge`, `Input`, `EntityRow`, `OriginBadge`, `Port`, `PermissionLine`, `Icon`).
+- `src/shell/` — the surface: `Palette` (⌘K), `Panes` (split + wires), `Trust`
+  (permission + secret chrome), `tools` (native + sandboxed-foreign interiors), `data`.
+- `src/App.tsx` — orchestrator: theme, panes, wiring, palette, trust gate.
+
+> The shell is the frame. Tool execution (cross-origin sandboxed iframes, the
+> `ctx` bus, secret injection, the `net` relay) is product runtime, not visual
+> design — the interiors here are demo stand-ins. See `docs/`.
+
 ## Status
 
-Design phase. SDK contract (storage, secrets, net, bus) under discussion — see
+Design phase. Shell client implemented from the design system (above). The SDK
+contract (storage, secrets, net, bus) is under discussion — see
 [docs/sdk.md](docs/sdk.md).
