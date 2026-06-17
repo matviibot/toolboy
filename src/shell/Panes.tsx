@@ -193,10 +193,15 @@ export function SplitSurface({ panes, toolsById, wires, sizes, onResize, onClose
   }, [panes, wires]);
 
   // ---- divider drag (resize) — no text/element selection while dragging ----
+  // `resizing` mirrors dragRef in state so the tool iframes can drop pointer
+  // events mid-resize; otherwise the cursor crossing a tool swallows the
+  // window-level mousemove/mouseup and the resize freezes (same as wire drag).
   const dragRef = useRef<{ i: number; x: number; w: number; sizes: number[] } | null>(null);
+  const [resizing, setResizing] = useState(false);
   function startDrag(i: number, e: React.MouseEvent) {
     e.preventDefault();
     dragRef.current = { i, x: e.clientX, w: containerRef.current!.getBoundingClientRect().width, sizes: [...sizes] };
+    setResizing(true);
     document.body.style.userSelect = "none";
     document.body.style.cursor = "col-resize";
     window.addEventListener("mousemove", onDrag);
@@ -214,6 +219,7 @@ export function SplitSurface({ panes, toolsById, wires, sizes, onResize, onClose
   }
   function endDrag() {
     dragRef.current = null;
+    setResizing(false);
     document.body.style.userSelect = "";
     document.body.style.cursor = "";
     window.removeEventListener("mousemove", onDrag);
@@ -276,7 +282,11 @@ export function SplitSurface({ panes, toolsById, wires, sizes, onResize, onClose
             <div style={{ position: "relative", flex: `${sizes[i]} 1 0`, minWidth: 0, display: "flex" }}>
               <Glass elevation="panel" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: "var(--radius-lg)" }}>
                 <PaneHeader tool={tool} single={panes.length === 1} onSplit={() => onSplit(pane.uid)} onClose={() => onClose(pane.uid)} />
-                <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
+                {/* While a wire is being dragged OR a divider is being resized,
+                    iframes must not capture the pointer — otherwise the cursor
+                    crossing a tool swallows the window-level mousemove/mouseup
+                    and the drag freezes. */}
+                <div style={{ flex: 1, minHeight: 0, overflow: "hidden", pointerEvents: link || resizing ? "none" : undefined }}>
                   <SandboxedTool tool={tool} inputs={pane.inputs} theme={theme} onOutput={(port, v) => onOutput(pane.uid, port, v)} onToast={onToast} />
                 </div>
               </Glass>
