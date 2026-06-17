@@ -111,16 +111,22 @@ export const FRAME_RUNTIME_SRC = String.raw`
     }
   }
 
-  // host transfers the MessagePort via a single window.postMessage
-  window.addEventListener("message", function (ev) {
+  // host transfers the MessagePort via a single window.postMessage. Accept it ONLY
+  // from our host (window.parent) and ONLY once — then de-register, so no later or
+  // forged init-port from any other source can swap out the ctx channel.
+  function onInit(ev) {
     var m = ev.data;
     if (!m || m.k !== "init-port" || !ev.ports || !ev.ports[0]) return;
+    if (ev.source && ev.source !== window.parent) return; // not from the host
+    if (port) return;                                      // already initialized
+    window.removeEventListener("message", onInit);
     port = ev.ports[0];
     port.onmessage = onPortMessage;
     applyTheme(m.theme && m.theme.vars);
-    ctx = buildCtx({ toolId: m.toolId, visibility: m.visibility, theme: { name: m.theme.name, tokens: (m.theme.vars || {}) } });
+    ctx = buildCtx({ toolId: m.toolId, visibility: m.visibility, theme: { name: m.theme.name, vars: (m.theme.vars || {}) } });
     port.postMessage({ k: "ready" });
     mountIfReady();
-  });
+  }
+  window.addEventListener("message", onInit);
 })();
 `;

@@ -17,7 +17,7 @@ export interface TrustDialogProps {
   subject: TrustSubject;
   perms: Perms | AggPerms;
   secretsNeeded: string[];
-  onGrant: () => void;
+  onGrant: (secrets: Record<string, string>) => void;
   onCancel: () => void;
 }
 
@@ -28,7 +28,7 @@ export function TrustDialog({ subject, perms, secretsNeeded, onGrant, onCancel }
 
   const netDomains: string[] = (perms.net || []).map((n) => (typeof n === "string" ? n : n.domain));
   const needsSecret = (perms.secrets || []).length > 0;
-  const proceed = () => { if (needsSecret) setStage("secret"); else onGrant(); };
+  const proceed = () => { if (needsSecret) setStage("secret"); else onGrant({}); };
 
   return (
     <div
@@ -137,7 +137,7 @@ export function TrustDialog({ subject, perms, secretsNeeded, onGrant, onCancel }
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
               <Button variant="ghost" onClick={() => setStage("summary")}>Back</Button>
-              <Button variant="primary" onClick={onGrant} iconLeft={<Icon name="check" size={16} />}>Save & run</Button>
+              <Button variant="primary" onClick={() => onGrant(secretVals)} iconLeft={<Icon name="check" size={16} />}>Save & run</Button>
             </div>
           </div>
         )}

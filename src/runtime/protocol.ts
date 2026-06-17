@@ -41,8 +41,6 @@ export interface InitPort {
   k: "init-port";
   toolId: string;
   visibility: "public" | "private";
-  /** the tool's declared input port id, so the host knows where to deliver data */
-  acceptPort: string | null;
   theme: ThemePayload;
 }
 

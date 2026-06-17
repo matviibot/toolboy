@@ -7,6 +7,8 @@ import type { CSSProperties } from "react";
 import { Glass, IconButton, Kbd, Icon } from "./components";
 import markUrl from "./assets/logo/toolboy-mark.svg";
 import { aggregatePerms, loadRegistry, type LoadedRegistry, type LoadIssue } from "./loader/load";
+import { keyring } from "./runtime/keyring";
+import { originColors } from "./shell/origin";
 import type { AggPerms, Entity, Pane, Perms, Wire } from "./shell/types";
 import { Palette } from "./shell/Palette";
 import { SplitSurface } from "./shell/Panes";
@@ -16,8 +18,25 @@ import { TrustDialog, type TrustSubject } from "./shell/Trust";
 const BOOT_SOURCE = "self";
 
 let UID = 1;
-const mkPane = (toolId: string, input: unknown = null): Pane => ({ uid: "p" + UID++, toolId, input, lastOutput: null });
+const mkPane = (toolId: string): Pane => ({ uid: "p" + UID++, toolId, inputs: {}, lastOutputs: {} });
 const equalize = (n: number) => Array(n).fill(100 / n) as number[];
+
+/** would adding from→to close a directed loop? (to already reaches from, or self) */
+function wouldCycle(wires: Wire[], from: string, to: string): boolean {
+  if (from === to) return true;
+  const adj = new Map<string, string[]>();
+  wires.forEach((w) => adj.set(w.from, [...(adj.get(w.from) ?? []), w.to]));
+  const seen = new Set<string>();
+  const stack = [to];
+  while (stack.length) {
+    const n = stack.pop()!;
+    if (n === from) return true;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    (adj.get(n) ?? []).forEach((x) => stack.push(x));
+  }
+  return false;
+}
 
 type PaletteState = false | "open" | { splitFrom: string };
 
@@ -40,7 +59,8 @@ function BootSurface({ error }: { error: string | null }) {
 }
 
 function HomeSurface({ entities, onOpen }: { entities: Entity[]; onOpen: (e: Entity, split: boolean) => void }) {
-  const pinned = entities.slice(0, 6);
+  // promote scenes ahead of plain tools so a toolchain is reachable from home
+  const pinned = [...entities].sort((a, b) => Number(b.kind === "toolchain") - Number(a.kind === "toolchain")).slice(0, 6);
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28, animation: "tbFade var(--dur-slow) var(--ease-out)" }}>
       <img src={markUrl} width={76} height={76} alt="toolboy" style={{ filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.35))" }} />
@@ -57,7 +77,7 @@ function HomeSurface({ entities, onOpen }: { entities: Entity[]; onOpen: (e: Ent
             style={{ width: 138, padding: 14, cursor: "pointer", display: "flex", flexDirection: "column", gap: 10, transition: "transform var(--dur-fast) var(--ease-out)" }}
             onMouseEnter={(ev) => (ev.currentTarget.style.transform = "translateY(-3px)")}
             onMouseLeave={(ev) => (ev.currentTarget.style.transform = "translateY(0)")}>
-            <span style={{ display: "inline-grid", placeItems: "center", width: 32, height: 32, borderRadius: "var(--radius-sm)", background: e.origin === "public" ? "var(--public-soft)" : "var(--accent-soft)", color: e.origin === "public" ? "var(--public)" : "var(--accent)" }}>
+            <span style={{ display: "inline-grid", placeItems: "center", width: 32, height: 32, borderRadius: "var(--radius-sm)", background: originColors(e.origin).soft, color: originColors(e.origin).fg }}>
               <Icon name={e.icon} size={17} />
             </span>
             <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
@@ -115,8 +135,8 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const openSingle = useCallback((toolId: string, input: unknown) => {
-    setPanes([mkPane(toolId, input)]); setSizes([100]); setWires([]);
+  const openSingle = useCallback((toolId: string) => {
+    setPanes([mkPane(toolId)]); setSizes([100]); setWires([]);
   }, []);
 
   const addPane = useCallback((toolId: string) => {
@@ -124,10 +144,10 @@ export default function App() {
   }, []);
 
   const openToolchain = useCallback((chain: Extract<Entity, { kind: "toolchain" }>) => {
-    const ps = chain.tools.map((tid) => mkPane(tid, null));
-    const idByTool: Record<string, string> = {};
-    chain.tools.forEach((tid, i) => { idByTool[tid] = ps[i].uid; });
-    const ws: Wire[] = chain.wires.map(([a, b]) => ({ from: idByTool[a], to: idByTool[b] }));
+    const ps = chain.tools.map((t) => mkPane(t.toolId));
+    const uidByInstance: Record<string, string> = {};
+    chain.tools.forEach((t, i) => { uidByInstance[t.instance] = ps[i].uid; });
+    const ws: Wire[] = chain.wires.map((w) => ({ from: uidByInstance[w.from], fromPort: w.fromPort, to: uidByInstance[w.to], toPort: w.toPort }));
     setPanes(ps); setSizes(equalize(ps.length)); setWires(ws);
   }, []);
 
@@ -138,7 +158,7 @@ export default function App() {
       const splitFrom = typeof cur === "object" && cur && "splitFrom" in cur;
       const doOpen = () => {
         if (entity.kind === "toolchain") { openToolchain(entity); return; }
-        if (splitFrom || split) addPane(entity.id); else openSingle(entity.id, null);
+        if (splitFrom || split) addPane(entity.id); else openSingle(entity.id);
       };
       // trust gate: public entities, toolchains, or anything needing secrets
       const perms: Perms | AggPerms = entity.kind === "toolchain" ? aggregatePerms(entity, registry.toolsById) : entity.perms;
@@ -157,25 +177,35 @@ export default function App() {
     });
   }, [registry, openSingle, addPane, openToolchain]);
 
-  const onOutput = useCallback((uid: string, value: unknown) => {
+  const onOutput = useCallback((uid: string, port: string, value: unknown) => {
     setPanes((ps) => {
-      const downstream = wires.filter((w) => w.from === uid).map((w) => w.to);
+      const targets = wires.filter((w) => w.from === uid && w.fromPort === port).map((w) => w.toPort && { uid: w.to, port: w.toPort });
       return ps.map((p) => {
-        if (p.uid === uid) return { ...p, lastOutput: value };
-        if (downstream.includes(p.uid)) return { ...p, input: value };
-        return p;
+        let np = p;
+        if (np.uid === uid) np = { ...np, lastOutputs: { ...np.lastOutputs, [port]: value } };
+        const t = targets.find((t) => t && t.uid === np.uid);
+        if (t) np = { ...np, inputs: { ...np.inputs, [t.port]: value } };
+        return np;
       });
     });
   }, [wires]);
 
-  const onSend = useCallback((fromUid: string, toUid: string) => {
-    setWires((ws) => (ws.some((w) => w.from === fromUid && w.to === toUid) ? ws : [...ws, { from: fromUid, to: toUid }]));
+  const onSend = useCallback((fromUid: string, fromPort: string, toUid: string, toPort: string) => {
+    if (wouldCycle(wires, fromUid, toUid)) { pushToast("That wire would create a loop", "error"); return; }
+    setWires((ws) =>
+      ws.some((w) => w.from === fromUid && w.fromPort === fromPort && w.to === toUid && w.toPort === toPort)
+        ? ws
+        : [...ws, { from: fromUid, fromPort, to: toUid, toPort }],
+    );
     setPanes((ps) => {
       const src = ps.find((p) => p.uid === fromUid);
-      const seed = src && src.lastOutput != null ? src.lastOutput : { from: src && registry ? registry.toolsById[src.toolId]?.name ?? "?" : "?" };
-      return ps.map((p) => (p.uid === toUid ? { ...p, input: seed } : p));
+      // only seed when the source already has a real value on that port — never
+      // fabricate a placeholder that violates the target port's declared type
+      const seed = src ? src.lastOutputs[fromPort] : undefined;
+      if (seed === undefined) return ps;
+      return ps.map((p) => (p.uid === toUid ? { ...p, inputs: { ...p.inputs, [toPort]: seed } } : p));
     });
-  }, [registry]);
+  }, [wires, pushToast]);
 
   const closePane = useCallback((uid: string) => {
     setPanes((ps) => { const next = ps.filter((p) => p.uid !== uid); setSizes(equalize(next.length)); return next; });
@@ -234,7 +264,12 @@ export default function App() {
           perms={trust.perms}
           secretsNeeded={trust.secretsNeeded}
           onCancel={() => setTrust(null)}
-          onGrant={() => { const a = trust.action; setTrust(null); a?.(); }}
+          onGrant={(secrets) => {
+            // persist entered secrets into the host keyring before running — the host
+            // injects them into ctx.net requests; tool code never sees them
+            Object.entries(secrets).forEach(([name, value]) => { if (value) keyring.set(name, value); });
+            const a = trust.action; setTrust(null); a?.();
+          }}
         />
       )}
 

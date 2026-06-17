@@ -32,26 +32,29 @@ function readThemeVars(): Record<string, string> {
 
 export interface SandboxedToolProps {
   tool: Tool;
-  input: unknown;
+  /** latest value per input port id */
+  inputs: Record<string, unknown>;
   theme: "dark" | "light";
-  onOutput: (value: unknown) => void;
+  onOutput: (port: string, value: unknown) => void;
   onToast: (message: string, tone: "info" | "success" | "error") => void;
 }
 
-export function SandboxedTool({ tool, input, theme, onOutput, onToast }: SandboxedToolProps) {
+export function SandboxedTool({ tool, inputs, theme, onOutput, onToast }: SandboxedToolProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const bridgeRef = useRef<ToolBridge | null>(null);
+  // last value sent per port, so we only forward genuine changes (not re-renders)
+  const sentRef = useRef<Record<string, unknown>>({});
 
   const srcDoc = useMemo(() => buildSrcdoc(tool.source || "/* missing tool source */"), [tool.source]);
 
-  // latest callbacks/input without re-running the bridge-setup effect
+  // latest callbacks/inputs without re-running the bridge-setup effect
   const onOutputRef = useRef(onOutput);
   const onToastRef = useRef(onToast);
-  const inputRef = useRef(input);
+  const inputsRef = useRef(inputs);
   const themeRef = useRef(theme);
   onOutputRef.current = onOutput;
   onToastRef.current = onToast;
-  inputRef.current = input;
+  inputsRef.current = inputs;
   themeRef.current = theme;
 
   // build the bridge once the frame document has loaded; tear down on unmount/reload
@@ -61,19 +64,22 @@ export function SandboxedTool({ tool, input, theme, onOutput, onToast }: Sandbox
 
     function attach() {
       bridgeRef.current?.dispose();
+      sentRef.current = {};
       const themePayload: ThemePayload = { name: themeRef.current, vars: readThemeVars() };
       const bridge = new ToolBridge(iframe!, {
         toolId: tool.id,
         visibility: tool.origin === "public" ? "public" : "private",
         perms: tool.perms,
-        acceptPort: tool.ports.accepts[0]?.id ?? null,
         theme: themePayload,
-        onOutput: (v) => onOutputRef.current(v),
+        onOutput: (port, v) => onOutputRef.current(port, v),
         onToast: (m, t) => onToastRef.current(m, t),
       });
       bridgeRef.current = bridge;
-      // flush whatever input the pane already holds (e.g. seeded by a wire)
-      if (inputRef.current != null) bridge.sendInput(inputRef.current);
+      // flush whatever inputs the pane already holds (e.g. seeded by a wire)
+      for (const [port, value] of Object.entries(inputsRef.current)) {
+        bridge.sendInput(port, value);
+        sentRef.current[port] = value;
+      }
     }
 
     iframe.addEventListener("load", attach);
@@ -84,10 +90,18 @@ export function SandboxedTool({ tool, input, theme, onOutput, onToast }: Sandbox
     };
   }, [tool.id, srcDoc]);
 
-  // input changes flow over the port, not by reloading the frame
+  // input changes flow over the port, not by reloading the frame; only forward
+  // ports whose value actually changed since we last sent it
   useEffect(() => {
-    bridgeRef.current?.sendInput(input);
-  }, [input]);
+    const bridge = bridgeRef.current;
+    if (!bridge) return;
+    for (const [port, value] of Object.entries(inputs)) {
+      if (sentRef.current[port] !== value) {
+        bridge.sendInput(port, value);
+        sentRef.current[port] = value;
+      }
+    }
+  }, [inputs]);
 
   // theme toggle re-pushes tokens to the live frame
   useEffect(() => {

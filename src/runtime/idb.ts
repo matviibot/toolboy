@@ -1,51 +1,34 @@
 /* toolboy runtime — host-side persistent storage backing `ctx.storage`.
 
-   A single IndexedDB object store, keyed `"<toolId>::<key>"`. Namespacing is
-   enforced here, on the host, not in the tool: a tool only ever passes its own
-   bare key and the host prefixes it, so one tool can never read another's data
-   (security.md: "Storage is namespaced per tool; a tool sees only its own keys"). */
+   A single IndexedDB object store keyed by the ARRAY key `[toolId, key]`. Using a
+   structured array key (not a `"<toolId>::<key>"` string) means namespacing can't
+   be spoofed: there's no delimiter to inject or to collide on, and `keys()` selects
+   exactly one tool's entries via a key range rather than a string-prefix match. A
+   tool only ever passes its own bare key; the host pairs it with the toolId, so one
+   tool can never read another's data (security.md: "a tool sees only its own keys").
 
-const DB_NAME = "toolboy";
-const STORE = "kv";
+   NOTE: toolId is the manifest entity id, unique within a repo. Multi-repo loading
+   will need to qualify this with the repo/pin to keep ids from different repos from
+   sharing a namespace; today the single boot registry makes id sufficient. */
 
-let dbPromise: Promise<IDBDatabase> | null = null;
+import { openDb, runTx } from "../lib/idb";
 
-function open(): Promise<IDBDatabase> {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => {
-      if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("indexedDB open failed"));
-  });
-  return dbPromise;
-}
+const db = openDb("toolboy", 1, ["kv"]);
+const tx = <T>(mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest<T>) =>
+  runTx<T>(db, "kv", mode, run);
 
-function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  return open().then(
-    (db) =>
-      new Promise<T>((resolve, reject) => {
-        const store = db.transaction(STORE, mode).objectStore(STORE);
-        const req = run(store);
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error ?? new Error("indexedDB request failed"));
-      }),
-  );
-}
-
-const ns = (toolId: string, key: string) => `${toolId}::${key}`;
+/** key range covering every [toolId, *] entry — arrays sort after strings, so
+    [toolId, []] is an exclusive-feeling upper bound past all string sub-keys */
+const toolRange = (toolId: string) => IDBKeyRange.bound([toolId], [toolId, []]);
 
 export const storage = {
-  get: (toolId: string, key: string) => tx<unknown>("readonly", (s) => s.get(ns(toolId, key))),
+  get: (toolId: string, key: string) => tx<unknown>("readonly", (s) => s.get([toolId, key])),
   set: (toolId: string, key: string, value: unknown) =>
-    tx("readwrite", (s) => s.put(value, ns(toolId, key))).then(() => undefined),
+    tx("readwrite", (s) => s.put(value, [toolId, key])).then(() => undefined),
   delete: (toolId: string, key: string) =>
-    tx("readwrite", (s) => s.delete(ns(toolId, key))).then(() => undefined),
+    tx("readwrite", (s) => s.delete([toolId, key])).then(() => undefined),
   keys: async (toolId: string): Promise<string[]> => {
-    const all = (await tx<IDBValidKey[]>("readonly", (s) => s.getAllKeys())) as string[];
-    const prefix = `${toolId}::`;
-    return all.filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length));
+    const all = (await tx<IDBValidKey[]>("readonly", (s) => s.getAllKeys(toolRange(toolId)))) as [string, string][];
+    return all.map((k) => k[1]);
   },
 };
