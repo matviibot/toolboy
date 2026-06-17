@@ -85,10 +85,12 @@ npm run build      # typecheck + production build
 
 ## Status
 
-Manifest loader + runtime boundary implemented. Entities load from a git
-`toolboy.json` (fetch → validate → SRI-verify → content-addressed cache → render);
-tools run in sandboxed iframes behind the host-mediated `ctx` bridge (storage,
-secrets, net allowlist + injection, bus, ui). The bundled `public/registry/` is the
-boot source; the `gh:` resolver pins to a commit. Next: the registry/discovery
-backend, the `net` relay fallback, and background revalidation (stale-while-revalidate
-poll → the "updates available" affordance). See [docs/](docs/).
+Manifest loader + runtime boundary + background revalidation implemented. Entities
+load from a git `toolboy.json` (fetch → validate → SRI-verify → content-addressed
+cache → render); tools run in sandboxed iframes behind the host-mediated `ctx` bridge
+(storage, secrets, net allowlist + injection, bus, ui). The bundled `public/registry/`
+is the boot source; the `gh:` resolver pins to a commit. While online and visible, the
+loader polls the source's mutable pointer in the background and surfaces a passive
+"updates available" affordance — applied only on accept, never silently
+(stale-while-revalidate; see [docs/loading.md](docs/loading.md)). Next: the
+registry/discovery backend and the `net` relay fallback. See [docs/](docs/).
