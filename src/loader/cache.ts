@@ -10,39 +10,15 @@
    Separate DB from the per-tool `ctx.storage` ("toolboy" / "kv" in idb.ts) so the
    two concerns stay decoupled. */
 
+import { openDb, runTx } from "../lib/idb";
 import type { Manifest } from "./manifest";
 
-const DB_NAME = "toolboy-cache";
 const BUNDLES = "bundles";
 const MANIFESTS = "manifests";
 
-let dbPromise: Promise<IDBDatabase> | null = null;
-
-function open(): Promise<IDBDatabase> {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME, 1);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(BUNDLES)) db.createObjectStore(BUNDLES);
-      if (!db.objectStoreNames.contains(MANIFESTS)) db.createObjectStore(MANIFESTS);
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("cache open failed"));
-  });
-  return dbPromise;
-}
-
-function tx<T>(store: string, mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest<T>): Promise<T> {
-  return open().then(
-    (db) =>
-      new Promise<T>((resolve, reject) => {
-        const req = run(db.transaction(store, mode).objectStore(store));
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error ?? new Error("cache request failed"));
-      }),
-  );
-}
+const db = openDb("toolboy-cache", 1, [BUNDLES, MANIFESTS]);
+const tx = <T>(store: string, mode: IDBTransactionMode, run: (s: IDBObjectStore) => IDBRequest<T>) =>
+  runTx<T>(db, store, mode, run);
 
 export interface CachedManifest {
   manifest: Manifest;

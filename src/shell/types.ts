@@ -31,6 +31,13 @@ export interface Tool {
   source: string;
 }
 
+/** a tool slot in a scene; `instance` is the local handle (the same tool id can
+    appear under multiple instances), `toolId` resolves which tool fills it */
+export interface ToolInstance {
+  instance: string;
+  toolId: string;
+}
+
 export interface Toolchain {
   id: string;
   kind: "toolchain";
@@ -38,8 +45,9 @@ export interface Toolchain {
   icon: string;
   description: string;
   origin: Origin;
-  tools: string[];
-  wires: [string, string][];
+  tools: ToolInstance[];
+  /** wires between instance handles, port-qualified (resolved to pane uids on open) */
+  wires: { from: string; fromPort: string; to: string; toPort: string }[];
 }
 
 export type Entity = Tool | Toolchain;
@@ -54,11 +62,16 @@ export interface AggPerms {
 export interface Pane {
   uid: string;
   toolId: string;
-  input: unknown;
-  lastOutput: unknown;
+  /** latest value on each input port id (host-mediated bus, keyed by port) */
+  inputs: Record<string, unknown>;
+  /** latest value emitted on each output port id (sticky last-value) */
+  lastOutputs: Record<string, unknown>;
 }
 
+/** a live wire between two panes, qualified by the specific ports it connects */
 export interface Wire {
   from: string;
+  fromPort: string;
   to: string;
+  toPort: string;
 }

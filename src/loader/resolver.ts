@@ -34,8 +34,6 @@ export function parseSource(spec: string, fallbackBase = "/registry"): Source {
   throw new Error(`unrecognized source: ${spec}`);
 }
 
-const isCommitSha = (ref: string) => /^[0-9a-f]{7,40}$/i.test(ref);
-
 /** Resolve a Source to URLs + the immutable pin it reads from. */
 export async function resolveSource(src: Source): Promise<Resolved> {
   if (src.kind === "static") {
@@ -47,15 +45,15 @@ export async function resolveSource(src: Source): Promise<Resolved> {
     };
   }
 
-  // github: resolve the mutable pointer (branch/tag) to a commit SHA — the pin
-  let commit = src.ref;
-  if (!isCommitSha(src.ref)) {
-    const res = await fetch(`https://api.github.com/repos/${src.owner}/${src.repo}/commits/${src.ref}`, {
-      headers: { Accept: "application/vnd.github.sha" },
-    });
-    if (!res.ok) throw new Error(`could not resolve ${src.owner}/${src.repo}@${src.ref}: ${res.status}`);
-    commit = (await res.text()).trim();
-  }
+  // github: always resolve the ref to a canonical commit SHA — the immutable pin.
+  // The commits API accepts a branch, tag, OR a sha and echoes back the sha, so we
+  // never assume a hex-looking ref is already a commit (a branch named like a hash
+  // would otherwise be used unpinned and 404 the raw fetch).
+  const res = await fetch(`https://api.github.com/repos/${src.owner}/${src.repo}/commits/${src.ref}`, {
+    headers: { Accept: "application/vnd.github.sha" },
+  });
+  if (!res.ok) throw new Error(`could not resolve ${src.owner}/${src.repo}@${src.ref}: ${res.status}`);
+  const commit = (await res.text()).trim();
   const rawBase = `https://raw.githubusercontent.com/${src.owner}/${src.repo}/${commit}`;
   return {
     pin: commit,

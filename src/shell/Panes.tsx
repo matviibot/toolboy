@@ -1,12 +1,14 @@
 /* toolboy split surface — one continuous glass plane. Resizable panes with
-   draggable dividers and typed half-circle ports on the facing edges: an output
-   nub low on a tool's right edge, an input nub high on the next tool's left edge.
-   Wires run vertically in the channel between tools; drag an output nub onto a
-   type-compatible input nub to connect. */
+   draggable dividers and typed half-circle ports on the facing edges: a tool's
+   output ports stack low on its right edge, its input ports high on the left edge.
+   Wires run through the channel between tools; drag an output nub onto a
+   type-compatible input nub to connect. A tool may declare multiple ports — each
+   gets its own nub, and wires are qualified by the exact (pane, port) they join. */
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { Glass, IconButton, OriginBadge, Icon } from "../components";
 import type { Pane, Tool, Wire } from "./types";
+import { originColors } from "./origin";
 import { SandboxedTool } from "../runtime/SandboxedTool";
 
 /** an output's type can feed an input port when types match (json coerces to text). */
@@ -17,16 +19,17 @@ function compatible(outType: string, inType: string): boolean {
 interface WirePath { id: string; d: string; x2: number; y2: number; }
 
 /** Node-graph bezier: leaves the output and enters the input horizontally
-    (perpendicular to the tools' vertical edges); the bend lives in the channel,
-    so adjacent ports read as a clean vertical wire. */
+    (perpendicular to the tools' vertical edges); the bend lives in the channel. */
 function curve(x1: number, y1: number, x2: number, y2: number): string {
   const cx = (x1 + x2) / 2;
   return `M ${x1} ${y1} C ${cx} ${y1}, ${cx} ${y2}, ${x2} ${y2}`;
 }
 
-const wireId = (w: Wire) => `${w.from}->${w.to}`;
+const wireId = (w: Wire) => `${w.from}.${w.fromPort}->${w.to}.${w.toPort}`;
+const outNubId = (uid: string, port: string) => `port-out-${uid}-${port}`;
+const inNubId = (uid: string, port: string) => `port-in-${uid}-${port}`;
 
-interface LinkDrag { fromUid: string; type: string; x: number; y: number; }
+interface LinkDrag { fromUid: string; fromPort: string; type: string; x: number; y: number; }
 
 // ---- port nub (the connection point) — rounded on the gap-facing end only ----
 function PortNub({ direction, wired, pulse, target }: { direction: "in" | "out"; wired: boolean; pulse?: boolean; target?: boolean }) {
@@ -38,7 +41,6 @@ function PortNub({ direction, wired, pulse, target }: { direction: "in" | "out";
       style={{
         width: 10,
         height: 18,
-        // square where it meets the tool, rounded into the channel
         borderRadius: isOut ? "0 5px 5px 0" : "5px 0 0 5px",
         background: lit ? "var(--accent)" : "var(--glass-fill-strong)",
         border: `1px solid ${lit ? "var(--accent)" : "var(--glass-stroke)"}`,
@@ -75,15 +77,15 @@ function WireLayer({ wires, link, flow, containerRef, tick }: {
 
     const next: WirePath[] = [];
     wires.forEach((w) => {
-      const a = center(document.getElementById("port-out-" + w.from));
-      const b = center(document.getElementById("port-in-" + w.to));
+      const a = center(document.getElementById(outNubId(w.from, w.fromPort)));
+      const b = center(document.getElementById(inNubId(w.to, w.toPort)));
       if (!a || !b) return;
       next.push({ id: wireId(w), d: curve(a.x, a.y, b.x, b.y), x2: b.x, y2: b.y });
     });
     setPaths(next);
 
     if (link) {
-      const a = center(document.getElementById("port-out-" + link.fromUid));
+      const a = center(document.getElementById(outNubId(link.fromUid, link.fromPort)));
       setLive(a ? { d: curve(a.x, a.y, link.x, link.y), x2: link.x, y2: link.y } : null);
     } else {
       setLive(null);
@@ -94,12 +96,9 @@ function WireLayer({ wires, link, flow, containerRef, tick }: {
     <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none", zIndex: "var(--z-wire)", overflow: "visible" } as CSSProperties}>
       {paths.map((p) => (
         <g key={p.id}>
-          {/* calm static wire — pathLength normalized so it draws on fully at any length */}
           <path d={p.d} pathLength={1} fill="none" stroke="var(--accent)" strokeWidth="2" strokeOpacity="0.85"
             style={{ filter: "drop-shadow(0 0 4px var(--accent-faint))", strokeDasharray: 1, strokeDashoffset: 0, animation: "tbWireDraw var(--dur-base) var(--ease-out)" }} />
           <circle cx={p.x2} cy={p.y2} r="3.5" fill="var(--accent)" />
-          {/* data pulse — a short dash travels the wire each time fresh data lands.
-              CSS (not SMIL) so it never fights React's reconciler. key replays it. */}
           {flow[p.id] ? (
             <path
               key={flow[p.id]}
@@ -128,7 +127,7 @@ function WireLayer({ wires, link, flow, containerRef, tick }: {
 function PaneHeader({ tool, onSplit, onClose, single }: { tool: Tool; onSplit: () => void; onClose: () => void; single: boolean }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 10px 9px 13px", borderBottom: "1px solid var(--glass-stroke)", flex: "none" }}>
-      <span style={{ display: "inline-grid", placeItems: "center", width: 26, height: 26, borderRadius: "var(--radius-xs)", background: tool.origin === "public" ? "var(--public-soft)" : "var(--accent-soft)", color: tool.origin === "public" ? "var(--public)" : "var(--accent)", flex: "none" }}>
+      <span style={{ display: "inline-grid", placeItems: "center", width: 26, height: 26, borderRadius: "var(--radius-xs)", background: originColors(tool.origin).soft, color: originColors(tool.origin).fg, flex: "none" }}>
         <Icon name={tool.icon} size={15} />
       </span>
       <span style={{ font: "var(--type-label)", color: "var(--fg-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tool.name}</span>
@@ -149,8 +148,8 @@ export interface SplitSurfaceProps {
   onResize: (sizes: number[]) => void;
   onClose: (uid: string) => void;
   onSplit: (uid: string) => void;
-  onSend: (fromUid: string, toUid: string) => void;
-  onOutput: (uid: string, value: unknown) => void;
+  onSend: (fromUid: string, fromPort: string, toUid: string, toPort: string) => void;
+  onOutput: (uid: string, port: string, value: unknown) => void;
   theme: "dark" | "light";
   onToast: (message: string, tone: "info" | "success" | "error") => void;
 }
@@ -170,20 +169,24 @@ export function SplitSurface({ panes, toolsById, wires, sizes, onResize, onClose
     return () => { ro.disconnect(); window.removeEventListener("resize", bump); window.clearTimeout(r); };
   }, [panes.length]);
 
-  // ---- data flow: bump a wire's pulse key when fresh data reaches its target ----
-  const prevInputs = useRef<Record<string, string>>({});
+  // ---- data flow: bump a wire's pulse key when fresh data reaches its target port.
+  //      Compare input values by REFERENCE (App produces a new value object on each
+  //      emit) so we never JSON.stringify large payloads just to drive the animation.
+  const prevInputs = useRef<Record<string, unknown>>({});
   const [flow, setFlow] = useState<Record<string, number>>({});
   useEffect(() => {
-    const changed = new Set<string>();
+    const changed = new Set<string>(); // `${uid}:${port}`
     panes.forEach((p) => {
-      const sig = JSON.stringify(p.input ?? null);
-      if (p.uid in prevInputs.current && prevInputs.current[p.uid] !== sig) changed.add(p.uid);
-      prevInputs.current[p.uid] = sig;
+      Object.entries(p.inputs).forEach(([port, val]) => {
+        const k = `${p.uid}:${port}`;
+        if (k in prevInputs.current && prevInputs.current[k] !== val) changed.add(k);
+        prevInputs.current[k] = val;
+      });
     });
     if (changed.size) {
       setFlow((f) => {
         const n = { ...f };
-        wires.forEach((w) => { if (changed.has(w.to)) n[wireId(w)] = (n[wireId(w)] || 0) + 1; });
+        wires.forEach((w) => { if (changed.has(`${w.to}:${w.toPort}`)) n[wireId(w)] = (n[wireId(w)] || 0) + 1; });
         return n;
       });
     }
@@ -220,11 +223,11 @@ export function SplitSurface({ panes, toolsById, wires, sizes, onResize, onClose
   // ---- wire drag (connect) — pull from an output nub onto a compatible input ----
   const [link, setLink] = useState<LinkDrag | null>(null);
   const linkRef = useRef<LinkDrag | null>(null);
-  function startLink(fromUid: string, type: string, e: React.MouseEvent) {
+  function startLink(fromUid: string, fromPort: string, type: string, e: React.MouseEvent) {
     e.preventDefault();
     e.stopPropagation();
     const cr = containerRef.current!.getBoundingClientRect();
-    const start: LinkDrag = { fromUid, type, x: e.clientX - cr.left, y: e.clientY - cr.top };
+    const start: LinkDrag = { fromUid, fromPort, type, x: e.clientX - cr.left, y: e.clientY - cr.top };
     linkRef.current = start;
     setLink(start);
     document.body.style.userSelect = "none";
@@ -246,8 +249,9 @@ export function SplitSurface({ panes, toolsById, wires, sizes, onResize, onClose
     const tgt = el ? (el.closest("[data-in-uid]") as HTMLElement | null) : null;
     if (d && tgt) {
       const toUid = tgt.getAttribute("data-in-uid")!;
+      const toPort = tgt.getAttribute("data-in-port")!;
       const inType = tgt.getAttribute("data-in-type") || "";
-      if (toUid !== d.fromUid && compatible(d.type, inType)) onSend(d.fromUid, toUid);
+      if (toUid !== d.fromUid && compatible(d.type, inType)) onSend(d.fromUid, d.fromPort, toUid, toPort);
     }
     linkRef.current = null;
     setLink(null);
@@ -257,20 +261,14 @@ export function SplitSurface({ panes, toolsById, wires, sizes, onResize, onClose
     window.removeEventListener("mouseup", onLinkUp);
   }
 
-  const incomingSet = new Set(wires.map((w) => w.to));
-  const wiredOutSet = new Set(wires.map((w) => w.from));
+  const incomingSet = new Set(wires.map((w) => `${w.to}:${w.toPort}`));
+  const wiredOutSet = new Set(wires.map((w) => `${w.from}:${w.fromPort}`));
 
   return (
     <div ref={containerRef} style={{ position: "relative", display: "flex", width: "100%", height: "100%", gap: 0 }}>
       {panes.map((pane, i) => {
         const tool = toolsById[pane.toolId];
-        const out = tool.ports.provides[0];
-        const inp = tool.ports.accepts[0];
-        const incoming = incomingSet.has(pane.uid);
-        const wiredOut = wiredOutSet.has(pane.uid);
         const dragging = !!link && link.fromUid === pane.uid;
-        // is this pane a valid drop target for the wire currently being dragged?
-        const isTarget = !!(link && inp && pane.uid !== link.fromUid && compatible(link.type, inp.type));
 
         return (
           <Fragment key={pane.uid}>
@@ -279,51 +277,56 @@ export function SplitSurface({ panes, toolsById, wires, sizes, onResize, onClose
               <Glass elevation="panel" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: "var(--radius-lg)" }}>
                 <PaneHeader tool={tool} single={panes.length === 1} onSplit={() => onSplit(pane.uid)} onClose={() => onClose(pane.uid)} />
                 <div style={{ flex: 1, minHeight: 0, overflow: "hidden" }}>
-                  <SandboxedTool tool={tool} input={pane.input} theme={theme} onOutput={(v) => onOutput(pane.uid, v)} onToast={onToast} />
+                  <SandboxedTool tool={tool} inputs={pane.inputs} theme={theme} onOutput={(port, v) => onOutput(pane.uid, port, v)} onToast={onToast} />
                 </div>
               </Glass>
 
-              {/* INPUT nub — high on the left edge, a wire drop target */}
-              {inp && (
-                <div
-                  id={"port-in-" + pane.uid}
-                  data-in-uid={pane.uid}
-                  data-in-type={inp.type}
-                  title={`input · ${inp.type}`}
-                  style={{
-                    position: "absolute",
-                    left: -10,
-                    top: 26,
-                    zIndex: 50,
-                    transform: isTarget ? "scale(1.18)" : "scale(1)",
-                    transformOrigin: "left center",
-                    transition: "transform var(--dur-fast) var(--ease-out)",
-                  }}
-                >
-                  <PortNub direction="in" wired={incoming} pulse={incoming} target={isTarget} />
-                </div>
-              )}
+              {/* INPUT nubs — stacked high on the left edge, each a wire drop target */}
+              {tool.ports.accepts.map((inp, idx) => {
+                const wired = incomingSet.has(`${pane.uid}:${inp.id}`);
+                const isTarget = !!(link && pane.uid !== link.fromUid && compatible(link.type, inp.type));
+                return (
+                  <div
+                    key={inp.id}
+                    id={inNubId(pane.uid, inp.id)}
+                    data-in-uid={pane.uid}
+                    data-in-port={inp.id}
+                    data-in-type={inp.type}
+                    title={`input · ${inp.id} · ${inp.type}`}
+                    style={{
+                      position: "absolute", left: -10, top: 26 + idx * 28, zIndex: 50,
+                      transform: isTarget ? "scale(1.18)" : "scale(1)",
+                      transformOrigin: "left center",
+                      transition: "transform var(--dur-fast) var(--ease-out)",
+                    }}
+                  >
+                    <PortNub direction="in" wired={wired} pulse={wired} target={isTarget} />
+                  </div>
+                );
+              })}
 
-              {/* OUTPUT nub — low on the right edge, drag it onto an input */}
-              {out && (
-                <div
-                  id={"port-out-" + pane.uid}
-                  onMouseDown={(e) => startLink(pane.uid, out.type, e)}
-                  title={`output · ${out.type} — drag onto an input`}
-                  style={{
-                    position: "absolute",
-                    right: -10,
-                    bottom: 26,
-                    zIndex: 50,
-                    cursor: dragging ? "grabbing" : "grab",
-                    transform: dragging ? "scale(1.18)" : "scale(1)",
-                    transformOrigin: "right center",
-                    transition: "transform var(--dur-fast) var(--ease-out)",
-                  }}
-                >
-                  <PortNub direction="out" wired={wiredOut || dragging} />
-                </div>
-              )}
+              {/* OUTPUT nubs — stacked low on the right edge, drag one onto an input */}
+              {tool.ports.provides.map((out, idx) => {
+                const wiredOut = wiredOutSet.has(`${pane.uid}:${out.id}`);
+                const isDragging = dragging && link!.fromPort === out.id;
+                return (
+                  <div
+                    key={out.id}
+                    id={outNubId(pane.uid, out.id)}
+                    onMouseDown={(e) => startLink(pane.uid, out.id, out.type, e)}
+                    title={`output · ${out.id} · ${out.type} — drag onto an input`}
+                    style={{
+                      position: "absolute", right: -10, bottom: 26 + idx * 28, zIndex: 50,
+                      cursor: isDragging ? "grabbing" : "grab",
+                      transform: isDragging ? "scale(1.18)" : "scale(1)",
+                      transformOrigin: "right center",
+                      transition: "transform var(--dur-fast) var(--ease-out)",
+                    }}
+                  >
+                    <PortNub direction="out" wired={wiredOut || isDragging} />
+                  </div>
+                );
+              })}
             </div>
 
             {i < panes.length - 1 && (

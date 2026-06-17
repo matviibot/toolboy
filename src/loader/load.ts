@@ -77,15 +77,19 @@ function toShellTool(e: ToolEntity, source: string): Tool {
   };
 }
 
-/** map a manifest toolchain → the shell's id-keyed model, dropping unresolved refs */
+/** map a manifest toolchain → the shell model, preserving instance handles (so the
+    same tool can appear twice) and port-qualified wires; drop unresolved instances */
 function toShellToolchain(e: ToolchainEntity, have: Set<string>): Toolchain | null {
-  const refOf: Record<string, string> = {};
-  e.tools.forEach((t) => (refOf[t.instance] = t.ref));
-  const tools = e.layout.children.map((inst) => refOf[inst]).filter((ref) => ref && have.has(ref));
+  const byInstance = new Map(e.tools.map((t) => [t.instance, t.ref] as const));
+  // order by layout.children, keep only instances whose tool resolved
+  const tools = e.layout.children
+    .map((inst) => ({ instance: inst, toolId: byInstance.get(inst) ?? "" }))
+    .filter((t) => t.toolId && have.has(t.toolId));
   if (tools.length === 0) return null;
+  const kept = new Set(tools.map((t) => t.instance));
   const wires = e.wires
-    .map((w) => [refOf[w.from[0]], refOf[w.to[0]]] as [string, string])
-    .filter(([a, b]) => have.has(a) && have.has(b));
+    .filter((w) => kept.has(w.from[0]) && kept.has(w.to[0]))
+    .map((w) => ({ from: w.from[0], fromPort: w.from[1], to: w.to[0], toPort: w.to[1] }));
   return {
     id: e.id,
     kind: "toolchain",
@@ -105,18 +109,23 @@ export async function loadRegistry(
   const resolved = await resolveSource(parseSource(sourceSpec));
   const { manifest, pin } = await fetchManifest(sourceSpec, resolved);
 
+  // fetch + verify all tool bundles concurrently — they're independent, so this is
+  // bounded by the slowest single bundle rather than their sum
+  const toolDefs = manifest.entities.filter((e): e is ToolEntity => e.kind === "tool");
+  const loaded = await Promise.all(
+    toolDefs.map(async (e) => {
+      try {
+        return toShellTool(e, await loadBundle(resolved, e));
+      } catch (err) {
+        onIssue?.({ id: e.id, reason: err instanceof Error ? err.message : String(err) });
+        return null;
+      }
+    }),
+  );
   const toolsById: Record<string, Tool> = {};
   const toolEntities: Tool[] = [];
-  for (const e of manifest.entities) {
-    if (e.kind !== "tool") continue;
-    try {
-      const source = await loadBundle(resolved, e);
-      const tool = toShellTool(e, source);
-      toolsById[tool.id] = tool;
-      toolEntities.push(tool);
-    } catch (err) {
-      onIssue?.({ id: e.id, reason: err instanceof Error ? err.message : String(err) });
-    }
+  for (const t of loaded) {
+    if (t) { toolsById[t.id] = t; toolEntities.push(t); }
   }
 
   const have = new Set(Object.keys(toolsById));
@@ -142,8 +151,8 @@ export function aggregatePerms(chain: Toolchain, toolsById: Record<string, Tool>
   const secrets = new Set<string>();
   const net = new Set<string>();
   let storage = false;
-  chain.tools.forEach((tid) => {
-    const t = toolsById[tid];
+  chain.tools.forEach(({ toolId }) => {
+    const t = toolsById[toolId];
     if (!t) return;
     if (t.perms.storage) storage = true;
     t.perms.secrets.forEach((s) => secrets.add(s));

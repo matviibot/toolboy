@@ -21,9 +21,9 @@ export interface BridgeConfig {
   toolId: string;
   visibility: "public" | "private";
   perms: BridgePerms;
-  acceptPort: string | null;
   theme: ThemePayload;
-  onOutput: (value: unknown) => void;
+  /** the tool emitted on one of its output ports */
+  onOutput: (port: string, value: unknown) => void;
   onToast: (message: string, tone: "info" | "success" | "error") => void;
 }
 
@@ -40,7 +40,7 @@ export class ToolBridge {
   private cfg: BridgeConfig;
   private frame: Window;
   private ready = false;
-  private queue: unknown[] = [];
+  private queue: { port: string; value: unknown }[] = [];
   private disposed = false;
 
   constructor(iframe: HTMLIFrameElement, cfg: BridgeConfig) {
@@ -52,21 +52,19 @@ export class ToolBridge {
       k: "init-port",
       toolId: cfg.toolId,
       visibility: cfg.visibility,
-      acceptPort: cfg.acceptPort,
       theme: cfg.theme,
     };
     // null-origin frame → must target "*"; the transferred port is the real channel
     this.frame.postMessage(init, "*", [this.channel.port2]);
   }
 
-  /** deliver data to the tool's declared input port (host-mediated bus) */
-  sendInput(value: unknown) {
-    if (!this.cfg.acceptPort) return;
+  /** deliver data to one of the tool's declared input ports (host-mediated bus) */
+  sendInput(port: string, value: unknown) {
     if (!this.ready) {
-      this.queue.push(value);
+      this.queue.push({ port, value });
       return;
     }
-    this.channel.port1.postMessage({ k: "input", port: this.cfg.acceptPort, value });
+    this.channel.port1.postMessage({ k: "input", port, value });
   }
 
   /** push updated theme tokens without reloading the frame */
@@ -86,11 +84,11 @@ export class ToolBridge {
     switch (m.k) {
       case "ready":
         this.ready = true;
-        this.queue.forEach((v) => this.sendInput(v));
+        this.queue.forEach(({ port, value }) => this.sendInput(port, value));
         this.queue = [];
         break;
       case "emit":
-        this.cfg.onOutput(m.value);
+        this.cfg.onOutput(m.port, m.value);
         break;
       case "toast":
         this.cfg.onToast(m.message, m.tone);
@@ -147,17 +145,28 @@ export class ToolBridge {
       throw new Error(`invalid URL: ${input}`);
     }
 
+    // the grant is a bare domain; honor only https on the default port, so a tool
+    // can't downgrade to cleartext http or reach a non-standard port on a granted host
+    if (url.protocol !== "https:") throw new Error(`net blocked: only https is allowed (got ${url.protocol})`);
+    if (url.port && url.port !== "443") throw new Error(`net blocked: non-standard port ${url.port}`);
+
     const grant = hostAllowed(url.hostname, this.cfg.perms.net);
     if (!grant) throw new Error(`net blocked: ${url.hostname} is not in this tool's allowlist`);
 
-    // host-side secret injection — the raw value is read here and never returned
+    // host-side secret injection — the raw value is read here and never returned.
+    // function replacer so $-sequences in the secret aren't treated as $&/$1 patterns
     const headers = new Headers(init.headers);
     if (grant.inject) {
       const secret = keyring.read(grant.inject.secret);
-      if (secret) headers.set(grant.inject.header, grant.inject.format.replace("{}", secret));
+      if (secret) headers.set(grant.inject.header, grant.inject.format.replace("{}", () => secret));
     }
 
-    const res = await fetch(url.toString(), { ...init, headers });
+    // never auto-follow redirects: the allowlist + injection were validated against THIS
+    // url only — a 30x to an off-allowlist host would otherwise leak headers/body
+    const res = await fetch(url.toString(), { ...init, headers, redirect: "manual" });
+    if (res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400)) {
+      throw new Error(`net blocked: ${url.hostname} attempted a redirect (not followed)`);
+    }
     const body = await res.text();
     const outHeaders: Record<string, string> = {};
     res.headers.forEach((v, k) => (outHeaders[k] = v));
