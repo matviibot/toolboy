@@ -30,20 +30,30 @@ export interface DiscoveryCard {
   pin: string;
 }
 
-const GH_RE = /^gh:([^/]+)\/([^@]+)@(.+)$/;
+// gh:owner/repo@ref[#subpath]. Kept byte-identical to src/loader/resolver.ts's parse
+// so the crawl reads exactly the path the client loads — a `#` fences off an optional
+// in-repo directory because the ref itself may contain slashes (e.g. feat/x).
+const GH_RE = /^gh:([^/]+)\/([^@]+)@([^#]+)(?:#(.+))?$/;
+
+function parseGh(source: string): { owner: string; repo: string; ref: string; sub?: string } {
+  const m = GH_RE.exec(source);
+  if (!m) throw new Error(`unsupported source (expected gh:owner/repo@ref[#subpath]): ${source}`);
+  const sub = m[4]?.replace(/^\/+/, "").replace(/\/+$/, "") || undefined;
+  return { owner: m[1], repo: m[2], ref: m[3], sub };
+}
 
 /** Resolve a gh: source to a raw toolboy.json URL at an immutable commit — mirrors
-    src/loader/resolver.ts so the index reads exactly what the client would. */
-async function resolveManifestUrl(source: string): Promise<{ url: string; pin: string }> {
-  const m = GH_RE.exec(source);
-  if (!m) throw new Error(`unsupported source (expected gh:owner/repo@ref): ${source}`);
-  const [, owner, repo, ref] = m;
+    src/loader/resolver.ts so the index reads exactly what the client would. Exported
+    for tests that pin the crawl path against the loader's. */
+export async function resolveManifestUrl(source: string): Promise<{ url: string; pin: string }> {
+  const { owner, repo, ref, sub } = parseGh(source);
   const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/commits/${ref}`, {
     headers: { Accept: "application/vnd.github.sha", "User-Agent": "toolboy-discovery" },
   });
   if (!res.ok) throw new Error(`could not resolve ${owner}/${repo}@${ref}: ${res.status}`);
   const pin = (await res.text()).trim();
-  return { url: `https://raw.githubusercontent.com/${owner}/${repo}/${pin}/toolboy.json`, pin };
+  const dir = sub ? `/${sub}` : "";
+  return { url: `https://raw.githubusercontent.com/${owner}/${repo}/${pin}${dir}/toolboy.json`, pin };
 }
 
 /** Pull just the discovery fields for the public entities of a manifest. Deliberately

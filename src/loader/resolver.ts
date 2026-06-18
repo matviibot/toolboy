@@ -15,7 +15,7 @@
 
 export type Source =
   | { kind: "static"; base: string }
-  | { kind: "github"; owner: string; repo: string; ref: string };
+  | { kind: "github"; owner: string; repo: string; ref: string; sub?: string };
 
 export interface Resolved {
   /** the exact commit (github) or content pin (static) the bytes come from */
@@ -27,11 +27,22 @@ export interface Resolved {
 /** Parse a manifest `source` string into a Source. */
 export function parseSource(spec: string, fallbackBase = "/registry"): Source {
   if (spec === "self") return { kind: "static", base: fallbackBase };
-  const gh = /^gh:([^/]+)\/([^@]+)@(.+)$/.exec(spec);
-  if (gh) return { kind: "github", owner: gh[1], repo: gh[2], ref: gh[3] };
+  // gh:owner/repo@ref[#subpath] — ref may contain slashes (e.g. feat/x), so a `#`
+  // unambiguously fences off an optional in-repo directory holding toolboy.json. The
+  // ref capture is [^#]+ (greedy up to the fence); the subpath is whatever follows.
+  const gh = /^gh:([^/]+)\/([^@]+)@([^#]+)(?:#(.+))?$/.exec(spec);
+  if (gh) return { kind: "github", owner: gh[1], repo: gh[2], ref: gh[3], sub: normalizeSub(gh[4]) };
   const git = /^git\+https?:\/\/.+#(.+)$/.exec(spec);
   if (git) throw new Error(`generic git sources not yet supported: ${spec}`);
   throw new Error(`unrecognized source: ${spec}`);
+}
+
+/** Strip surrounding slashes from a sub-path; an empty path (e.g. bare `@ref#`) is
+    treated as no sub-path so it collapses back to the repo-root behavior. */
+export function normalizeSub(sub: string | undefined): string | undefined {
+  if (!sub) return undefined;
+  const trimmed = sub.replace(/^\/+/, "").replace(/\/+$/, "");
+  return trimmed || undefined;
 }
 
 /** Resolve a Source to URLs + the immutable pin it reads from. */
@@ -57,7 +68,11 @@ export async function resolveSource(src: Source): Promise<Resolved> {
   });
   if (!res.ok) throw new Error(`could not resolve ${src.owner}/${src.repo}@${src.ref}: ${res.status}`);
   const commit = (await res.text()).trim();
-  const rawBase = `https://raw.githubusercontent.com/${src.owner}/${src.repo}/${commit}`;
+  // The sub-path (if any) shifts the base into a repo subdirectory; manifestUrl and
+  // entryUrl both inherit it, and manifest `entry` paths stay relative to the manifest.
+  const rawBase =
+    `https://raw.githubusercontent.com/${src.owner}/${src.repo}/${commit}` +
+    (src.sub ? `/${src.sub}` : "");
   return {
     pin: commit,
     manifestUrl: `${rawBase}/toolboy.json`,
