@@ -3,11 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "toolboy backend — stateless net relay (CORS fallback for ctx.net). Discovery index to follow.",
+  "description": "toolboy backend — net relay (CORS fallback for ctx.net) + discovery index.",
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:local": "wrangler d1 execute toolboy-index --local --file schema.sql",
+    "db:remote": "wrangler d1 execute toolboy-index --remote --file schema.sql"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250601.0",
