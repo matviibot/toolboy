@@ -47,7 +47,7 @@ port — never over `window` again. The wire protocol is one file both sides imp
 |---|---|
 | `storage` | Namespaced IndexedDB, keyed `"<toolId>::<key>"`. Denied entirely if `permissions.storage` is false. A tool only ever sees its own keys. |
 | `secrets.has(name)` | Boolean only. **Raw secret values never cross the boundary.** Only manifest-declared names are even acknowledged. |
-| `net.fetch` | Host checks the URL host against the tool's domain allowlist, **injects declared secrets** into request headers (host-side, from the keyring), performs the real fetch, returns a serialized response. |
+| `net.fetch` | Host checks the URL host against the tool's domain allowlist, **injects declared secrets** into request headers (host-side, from the keyring), performs the real fetch, returns a serialized response. A direct fetch is tried first; if it fails on CORS/network and a relay is configured (`VITE_NET_RELAY_URL`), the assembled request falls back to the backend relay ([backend/](../backend/)). Redirects are never followed on either path. |
 | `bus.emit / on` | Host-owned. A tool emits/receives only on its **own** declared ports; it never addresses another tool. Wiring lives in the shell; the host routes emit → downstream inputs. |
 | `ui.toast` | Drawn as host chrome, outside any tool frame — unspoofable. |
 

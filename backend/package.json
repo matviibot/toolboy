@@ -1,0 +1,17 @@
+{
+  "name": "toolboy-relay",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "toolboy backend — stateless net relay (CORS fallback for ctx.net). Discovery index to follow.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250601.0",
+    "typescript": "^5.6.3",
+    "wrangler": "^3.90.0"
+  }
+}
