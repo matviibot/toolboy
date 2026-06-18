@@ -1,7 +1,7 @@
 name = "toolboy-relay"
 main = "src/index.ts"
-# Pinned to a date the installed wrangler (v3) supports; bump when upgrading wrangler.
 # The Worker uses only standard fetch + D1, so the exact date isn't behaviour-sensitive.
+# Safe to bump once on a newer wrangler (see the Node note in package.json / README).
 compatibility_date = "2025-07-01"
 
 [vars]
