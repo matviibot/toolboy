@@ -1,8 +1,7 @@
 name = "toolboy-relay"
 main = "src/index.ts"
 # The Worker uses only standard fetch + D1, so the exact date isn't behaviour-sensitive.
-# Safe to bump once on a newer wrangler (see the Node note in package.json / README).
-compatibility_date = "2025-07-01"
+compatibility_date = "2026-06-01"
 
 [vars]
 # Lock this to your toolboy origin in production (comma-separated for several).

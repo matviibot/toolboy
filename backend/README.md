@@ -109,9 +109,9 @@ npm run db:remote                  # apply schema.sql to the remote D1
 npm run deploy                     # wrangler deploy → *.workers.dev URL
 ```
 
-> **Toolchain note.** `wrangler` is pinned to **4.86.0** — the last v4 that supports
-> **Node 20** (4.87+ require Node ≥22). On Node 22+ you can move to the latest v4 and,
-> if you like, bump `compatibility_date` in `wrangler.toml`.
+> **Toolchain note.** wrangler 4.87+ require **Node ≥22**; the repo pins Node 22 via
+> [`.nvmrc`](../.nvmrc) (`nvm use` to match). On an older Node, hold wrangler at 4.86.0
+> (the last v4 supporting Node 20).
 
 Point the client at it by setting `VITE_BACKEND_URL` (see [`.env.example`](../.env.example)
 at the repo root) to the Worker's base URL. The client appends `/relay` and `/discover`.
