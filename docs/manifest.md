@@ -1,7 +1,8 @@
 # Manifest (`toolboy.json`)
 
 Status: **implemented in the client loader** (`src/loader/manifest.ts` parses +
-validates this shape; the backend discovery index is still to come). One file at the
+validates this shape; the backend discovery index ([backend/](../backend/)) crawls it
+for public entity cards). One file at the
 repo root. It's the contract every layer reads: the client loader, the backend
 discovery index, and the trust UI. A repo's branch/HEAD is the **mutable pointer**;
 a specific commit is the **immutable pin** (see [loading.md](loading.md)).

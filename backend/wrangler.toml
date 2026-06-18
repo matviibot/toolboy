@@ -1,0 +1,24 @@
+name = "toolboy-relay"
+main = "src/index.ts"
+# The Worker uses only standard fetch + D1, so the exact date isn't behaviour-sensitive.
+compatibility_date = "2026-06-01"
+
+[vars]
+# Lock this to your toolboy origin in production (comma-separated for several).
+# "*" is safe only because the backend uses no cookies/credentials.
+ALLOWED_ORIGINS = "*"
+
+# Discovery index. Local dev (wrangler dev / --local) uses a local SQLite keyed by
+# `database_name` and ignores `database_id` — so the placeholder is fine for local.
+# For a remote deploy: run `wrangler d1 create toolboy-index` and paste the real id.
+[[d1_databases]]
+binding = "DB"
+database_name = "toolboy-index"
+database_id = "local"   # placeholder; replace with the real id from `wrangler d1 create`
+
+# Future hardening (security.md lists rate-limiting for the relay): bind a KV
+# namespace and add a fixed-window limiter keyed by cf.ip in src/relay.ts. The
+# README also notes KV as the cache layer for /discover.
+# [[kv_namespaces]]
+# binding = "RATE_LIMIT"
+# id = "<created via: wrangler kv namespace create RATE_LIMIT>"

@@ -11,6 +11,12 @@ import { keyring } from "./keyring";
 import type { FrameToHost, InitPort, NetResponse, ThemePayload } from "./protocol";
 import type { NetGrant } from "../shell/types";
 
+/** Optional backend (backend/). When set, a direct fetch that fails on CORS or the
+    network is retried through the relay (`<backend>/relay`), where same-origin rules
+    don't apply. Unset → direct fetch only, and a CORS failure surfaces to the tool. */
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, "");
+const NET_RELAY_URL = BACKEND_URL ? `${BACKEND_URL}/relay` : undefined;
+
 export interface BridgePerms {
   storage: boolean;
   secrets: string[];
@@ -163,13 +169,67 @@ export class ToolBridge {
 
     // never auto-follow redirects: the allowlist + injection were validated against THIS
     // url only — a 30x to an off-allowlist host would otherwise leak headers/body
-    const res = await fetch(url.toString(), { ...init, headers, redirect: "manual" });
-    if (res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400)) {
+    const reqInit: RequestInit = { ...init, headers, redirect: "manual" };
+    try {
+      const res = await fetch(url.toString(), reqInit);
+      return serializeResponse(url, res);
+    } catch (e) {
+      // A *connection-level* failure (CORS block, DNS, offline) throws a TypeError.
+      // Our own redirect rejection throws a plain Error after a successful fetch, so
+      // it isn't caught as a connection failure — only fall back to the relay for the
+      // real network/CORS case, and only when a relay is configured.
+      if (!NET_RELAY_URL || !(e instanceof TypeError)) throw e;
+      return this.relayFetch(url, reqInit, headers);
+    }
+  }
+
+  /** CORS fallback: hand the already-assembled request (secret headers and all) to
+      the backend relay, which forwards it server-side. The relay re-enforces the
+      allowlist + SSRF guard; we still reject relayed redirects, same as direct. */
+  private async relayFetch(url: URL, reqInit: RequestInit, headers: Headers): Promise<NetResponse> {
+    const headerObj: Record<string, string> = {};
+    headers.forEach((v, k) => (headerObj[k] = v));
+    const envelope = {
+      url: url.toString(),
+      method: (reqInit.method ?? "GET").toUpperCase(),
+      headers: headerObj,
+      body: typeof reqInit.body === "string" ? reqInit.body : undefined,
+      // the tool's granted domains — the relay refuses anything off this list
+      allow: this.cfg.perms.net.map((g) => g.domain),
+    };
+
+    let relayRes: Response;
+    try {
+      relayRes = await fetch(NET_RELAY_URL!, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(envelope),
+      });
+    } catch (e) {
+      throw new Error(`net relay unreachable: ${e instanceof Error ? e.message : String(e)}`);
+    }
+
+    const data = (await relayRes.json().catch(() => null)) as
+      | { relayed?: boolean; error?: string; response?: NetResponse }
+      | null;
+    if (!data) throw new Error("net relay: malformed response");
+    if (!data.relayed || !data.response) throw new Error(`net relay refused: ${data.error ?? relayRes.status}`);
+
+    const r = data.response;
+    if (r.status >= 300 && r.status < 400) {
       throw new Error(`net blocked: ${url.hostname} attempted a redirect (not followed)`);
     }
-    const body = await res.text();
-    const outHeaders: Record<string, string> = {};
-    res.headers.forEach((v, k) => (outHeaders[k] = v));
-    return { ok: res.ok, status: res.status, statusText: res.statusText, headers: outHeaders, body };
+    return r;
   }
+}
+
+/** Serialize a direct fetch Response into the wire shape, rejecting redirects. */
+async function serializeResponse(url: URL, res: Response): Promise<NetResponse> {
+  if (res.type === "opaqueredirect" || (res.status >= 300 && res.status < 400)) {
+    throw new Error(`net blocked: ${url.hostname} attempted a redirect (not followed)`);
+  }
+  const body = await res.text();
+  const outHeaders: Record<string, string> = {};
+  res.headers.forEach((v, k) => (outHeaders[k] = v));
+  return { ok: res.ok, status: res.status, statusText: res.statusText, headers: outHeaders, body };
 }

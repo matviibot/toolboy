@@ -13,6 +13,7 @@ import type { AggPerms, Entity, Pane, Perms, Wire } from "./shell/types";
 import { Palette } from "./shell/Palette";
 import { SplitSurface } from "./shell/Panes";
 import { TrustDialog, type TrustSubject } from "./shell/Trust";
+import type { DiscoveryCard } from "./loader/discovery";
 
 /** the manifest the app boots from — the bundled demo registry, served same-origin */
 const BOOT_SOURCE = "self";
@@ -20,6 +21,15 @@ const BOOT_SOURCE = "self";
 let UID = 1;
 const mkPane = (toolId: string): Pane => ({ uid: "p" + UID++, toolId, inputs: {}, lastOutputs: {} });
 const equalize = (n: number) => Array(n).fill(100 / n) as number[];
+
+/** Fold a discovered entity's repo into the live registry so its panes can resolve.
+    The boot source/pin identity is preserved (that's what revalidate keeps polling);
+    discovered entities just join the in-memory list until the next reload. */
+function mergeRegistries(base: LoadedRegistry, add: LoadedRegistry): LoadedRegistry {
+  const byId = new Map(base.all.map((e) => [e.id, e]));
+  for (const e of add.all) byId.set(e.id, e); // freshly-loaded version wins for a shared id
+  return { ...base, all: [...byId.values()], toolsById: { ...base.toolsById, ...add.toolsById } };
+}
 
 /** would adding from→to close a directed loop? (to already reaches from, or self) */
 function wouldCycle(wires: Wire[], from: string, to: string): boolean {
@@ -259,31 +269,55 @@ export default function App() {
     setPanes(ps); setSizes(equalize(ps.length)); setWires(ws);
   }, []);
 
+  // shared open path: trust-gate an entity against a registry, then open/split it.
+  // Used by both the local palette pick and the discovered-entity flow.
+  const runOpen = useCallback((entity: Entity, reg: LoadedRegistry, split: boolean) => {
+    const doOpen = () => {
+      if (entity.kind === "toolchain") { openToolchain(entity); return; }
+      if (split) addPane(entity.id); else openSingle(entity.id);
+    };
+    // trust gate: public entities, toolchains, or anything needing secrets
+    const perms: Perms | AggPerms = entity.kind === "toolchain" ? aggregatePerms(entity, reg.toolsById) : entity.perms;
+    const needsTrust = entity.origin === "public" || entity.kind === "toolchain" || (perms.secrets && perms.secrets.length > 0);
+    if (needsTrust) {
+      setTrust({
+        subject: { name: entity.name, kind: entity.kind, origin: entity.origin, toolCount: entity.kind === "toolchain" ? entity.tools.length : 0 },
+        perms,
+        secretsNeeded: perms.secrets || [],
+        action: doOpen,
+      });
+    } else {
+      doOpen();
+    }
+  }, [openSingle, addPane, openToolchain]);
+
   // pick from palette / home
   const pick = useCallback((entity: Entity, split: boolean) => {
     if (!registry) return;
     setPalette((cur) => {
       const splitFrom = typeof cur === "object" && cur && "splitFrom" in cur;
-      const doOpen = () => {
-        if (entity.kind === "toolchain") { openToolchain(entity); return; }
-        if (splitFrom || split) addPane(entity.id); else openSingle(entity.id);
-      };
-      // trust gate: public entities, toolchains, or anything needing secrets
-      const perms: Perms | AggPerms = entity.kind === "toolchain" ? aggregatePerms(entity, registry.toolsById) : entity.perms;
-      const needsTrust = entity.origin === "public" || entity.kind === "toolchain" || (perms.secrets && perms.secrets.length > 0);
-      if (needsTrust) {
-        setTrust({
-          subject: { name: entity.name, kind: entity.kind, origin: entity.origin, toolCount: entity.kind === "toolchain" ? entity.tools.length : 0 },
-          perms,
-          secretsNeeded: perms.secrets || [],
-          action: doOpen,
-        });
-      } else {
-        doOpen();
-      }
+      runOpen(entity, registry, splitFrom || split);
       return false; // close palette
     });
-  }, [registry, openSingle, addPane, openToolchain]);
+  }, [registry, runOpen]);
+
+  // pick a discovered entity: load its source repo through the normal loader (the
+  // index is a finder, not a trust shortcut), merge it in, then open via the trust gate
+  const pickDiscovered = useCallback(async (card: DiscoveryCard) => {
+    if (!registry) return;
+    setPalette(false);
+    pushToast(`Loading ${card.name} from ${card.repoName}…`, "info");
+    try {
+      const reg = await loadRegistry(card.source);
+      const entity = reg.all.find((e) => e.id === card.id);
+      if (!entity) { pushToast(`Couldn't find “${card.name}” in ${card.repoName}`, "error"); return; }
+      const merged = mergeRegistries(registry, reg);
+      setRegistry(merged);
+      runOpen(entity, merged, false);
+    } catch (err) {
+      pushToast(`Couldn't load “${card.name}”: ${err instanceof Error ? err.message : String(err)}`, "error");
+    }
+  }, [registry, runOpen, pushToast]);
 
   const onOutput = useCallback((uid: string, port: string, value: unknown) => {
     setPanes((ps) => {
@@ -365,7 +399,7 @@ export default function App() {
         </div>
       )}
 
-      {palette && registry && <Palette entities={registry.all} onClose={() => setPalette(false)} onPick={pick} />}
+      {palette && registry && <Palette entities={registry.all} onClose={() => setPalette(false)} onPick={pick} onPickDiscovered={pickDiscovered} />}
 
       {trust && (
         <TrustDialog
