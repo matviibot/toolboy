@@ -1,9 +1,11 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** Backend net-relay Worker URL (backend/). Unset → direct fetch only; a CORS
-      failure surfaces to the tool instead of falling back to the relay. */
-  readonly VITE_NET_RELAY_URL?: string;
+  /** Base URL of the toolboy backend Worker (backend/). Enables two things when set:
+      - the net-relay CORS fallback for ctx.net (`<backend>/relay`), and
+      - tool discovery across repos in the ⌘K palette (`<backend>/discover`).
+      Unset → direct fetch only and no discovery; the app works fully otherwise. */
+  readonly VITE_BACKEND_URL?: string;
 }
 
 interface ImportMeta {

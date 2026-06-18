@@ -1,14 +1,17 @@
 # toolboy backend
 
-A thin, stateless edge service (Cloudflare Workers). Two inhabitants are planned;
-the first is built:
+A thin edge service (Cloudflare Workers). One Worker, three routes:
 
-- **`net` relay** ✅ — a CORS fallback for `ctx.net`. Forwards a tool's request to
-  a third-party API when the browser can't reach it directly. SSRF-guarded,
-  allowlist-checked, stores nothing.
-- **discovery index** ⬜ — a read-only registry (D1) to find tools across repos.
-  Not built yet; this Worker is where it will live (add the D1 binding to
-  `wrangler.toml` then).
+- **`POST /relay`** — a CORS fallback for `ctx.net`. Forwards a tool's request to a
+  third-party API when the browser can't reach it directly. SSRF-guarded,
+  allowlist-checked, stores nothing. ([src/relay.ts](src/relay.ts))
+- **`POST /publish`** — crawl a repo's `toolboy.json` and index its public entities
+  into D1. ([src/discovery.ts](src/discovery.ts))
+- **`GET /discover`** — query the index so the ⌘K palette can surface tools from
+  repos the user hasn't pointed at yet. ([src/discovery.ts](src/discovery.ts))
+
+The router is [src/index.ts](src/index.ts); shared CORS/JSON helpers are in
+[src/http.ts](src/http.ts).
 
 ## The `net` relay
 
@@ -65,15 +68,44 @@ POST <relay>/
 4xx  { "relayed": false, "error": "…" }
 ```
 
+## The discovery index
+
+A read-only registry (D1) so the palette can find public tools across repos. It does
+**not** execute or fully validate tools — it stores discovery *cards* (id, kind, name,
+description, tags, icon) for public entities only. When the user opens one, the client
+loads that entity's source repo through the normal loader (resolver → manifest → SRI →
+trust gate), so the index is a finder, never a trust shortcut.
+
+- **Populate model: crawl-on-publish.** `POST /publish { source }` pulls that repo's
+  `toolboy.json` on demand, extracts its public cards, and *replaces* the rows for that
+  source (so an un-published entity disappears). No background crawler, no auth — fine
+  for a personal/self-hosted index; a shared deployment would add a publish token.
+- **Private entities are never indexed** — a private tool's metadata stays in the
+  user's own registry.
+
+```jsonc
+POST /publish  { "source": "gh:owner/repo@ref" }
+200            { "source", "repo", "pin", "indexed": <n> }
+
+GET  /discover?q=<text>&tag=<tag>&limit=<n>
+200            { "entities": [ { id, source, kind, name, description, icon, tags, repoName, pin } ] }
+```
+
 ## Develop & deploy
 
 ```sh
 npm install
 npm run typecheck
-npm run dev       # local Worker at http://localhost:8787
+
+# discovery index (D1): create once, then apply the schema
+wrangler d1 create toolboy-index        # paste the printed database_id into wrangler.toml
+wrangler d1 execute toolboy-index --local  --file schema.sql   # local dev
+wrangler d1 execute toolboy-index --remote --file schema.sql   # production
+
+npm run dev       # local Worker at http://localhost:8787 (uses local D1)
 npm run deploy    # wrangler deploy (needs a Cloudflare account)
 ```
 
-Point the client at it by setting `VITE_NET_RELAY_URL` (see [`.env.example`](../.env.example)
-at the repo root) to the Worker URL. Unset → the host does direct fetch only and a
-CORS failure surfaces as-is.
+Point the client at it by setting `VITE_BACKEND_URL` (see [`.env.example`](../.env.example)
+at the repo root) to the Worker's base URL. The client appends `/relay` and `/discover`.
+Unset → direct fetch only (CORS failures surface as-is) and no cross-repo discovery.

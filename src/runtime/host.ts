@@ -11,10 +11,11 @@ import { keyring } from "./keyring";
 import type { FrameToHost, InitPort, NetResponse, ThemePayload } from "./protocol";
 import type { NetGrant } from "../shell/types";
 
-/** Optional backend relay (backend/). When set, a direct fetch that fails on CORS
-    or the network is retried server-side, where same-origin rules don't apply.
-    Unset → direct fetch only, and a CORS failure surfaces to the tool as-is. */
-const NET_RELAY_URL = import.meta.env.VITE_NET_RELAY_URL as string | undefined;
+/** Optional backend (backend/). When set, a direct fetch that fails on CORS or the
+    network is retried through the relay (`<backend>/relay`), where same-origin rules
+    don't apply. Unset → direct fetch only, and a CORS failure surfaces to the tool. */
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, "");
+const NET_RELAY_URL = BACKEND_URL ? `${BACKEND_URL}/relay` : undefined;
 
 export interface BridgePerms {
   storage: boolean;

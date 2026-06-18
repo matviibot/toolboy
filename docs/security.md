@@ -73,9 +73,9 @@ log, or exfiltrate it.
 
 ## The `net` relay (backend)
 
-Status: **implemented** — [backend/](../backend/) (Cloudflare Worker). The host
-([src/runtime/host.ts](../src/runtime/host.ts)) tries a direct fetch first and only
-falls back to the relay on a CORS/network failure, when `VITE_NET_RELAY_URL` is set.
+Status: **implemented** — [backend/](../backend/) (Cloudflare Worker, `POST /relay`).
+The host ([src/runtime/host.ts](../src/runtime/host.ts)) tries a direct fetch first and
+only falls back to the relay on a CORS/network failure, when `VITE_BACKEND_URL` is set.
 
 Direct `fetch` from the parent works for CORS-friendly APIs. When CORS blocks it, the
 request goes through the backend relay. The relay is **stateless and dumb**:
