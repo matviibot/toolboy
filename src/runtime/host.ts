@@ -8,6 +8,7 @@
 
 import { storage } from "./idb";
 import { keyring } from "./keyring";
+import { resolveNetRequest } from "./netPolicy";
 import type { FrameToHost, InitPort, NetResponse, ThemePayload } from "./protocol";
 import type { NetGrant } from "../shell/types";
 
@@ -31,14 +32,6 @@ export interface BridgeConfig {
   /** the tool emitted on one of its output ports */
   onOutput: (port: string, value: unknown) => void;
   onToast: (message: string, tone: "info" | "success" | "error") => void;
-}
-
-/** hostname allowlist check — exact match or a subdomain of a granted domain */
-function hostAllowed(host: string, grants: NetGrant[]): NetGrant | null {
-  for (const g of grants) {
-    if (host === g.domain || host.endsWith("." + g.domain)) return g;
-  }
-  return null;
 }
 
 export class ToolBridge {
@@ -142,30 +135,9 @@ export class ToolBridge {
   }
 
   private async netRpc(args: unknown[]): Promise<NetResponse> {
-    const input = String(args[0]);
     const init = (args[1] as RequestInit | null) ?? {};
-    let url: URL;
-    try {
-      url = new URL(input);
-    } catch {
-      throw new Error(`invalid URL: ${input}`);
-    }
-
-    // the grant is a bare domain; honor only https on the default port, so a tool
-    // can't downgrade to cleartext http or reach a non-standard port on a granted host
-    if (url.protocol !== "https:") throw new Error(`net blocked: only https is allowed (got ${url.protocol})`);
-    if (url.port && url.port !== "443") throw new Error(`net blocked: non-standard port ${url.port}`);
-
-    const grant = hostAllowed(url.hostname, this.cfg.perms.net);
-    if (!grant) throw new Error(`net blocked: ${url.hostname} is not in this tool's allowlist`);
-
-    // host-side secret injection — the raw value is read here and never returned.
-    // function replacer so $-sequences in the secret aren't treated as $&/$1 patterns
-    const headers = new Headers(init.headers);
-    if (grant.inject) {
-      const secret = keyring.read(grant.inject.secret);
-      if (secret) headers.set(grant.inject.header, grant.inject.format.replace("{}", () => secret));
-    }
+    // url/port/allowlist checks + host-side secret injection (netPolicy.ts); throws on any violation
+    const { url, headers } = resolveNetRequest(String(args[0]), init, this.cfg.perms.net, (n) => keyring.read(n));
 
     // never auto-follow redirects: the allowlist + injection were validated against THIS
     // url only — a 30x to an off-allowlist host would otherwise leak headers/body

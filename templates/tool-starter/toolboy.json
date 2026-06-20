@@ -1,0 +1,27 @@
+{
+  "$schema": "https://toolboy.app/schema/v1.json",
+  "manifestVersion": 1,
+
+  "repo": {
+    "name": "my-tools",
+    "description": "A starter toolboy registry — rename me and add your own tools",
+    "defaults": { "visibility": "private" }
+  },
+
+  "entities": [
+    {
+      "id": "hello",
+      "kind": "tool",
+      "name": "Hello",
+      "description": "A minimal starter tool",
+      "icon": "hand",
+      "tags": ["starter", "example"],
+      "entry": "tools/hello.js",
+      "ports": {
+        "accepts": [{ "id": "in", "type": "text/plain" }],
+        "provides": [{ "id": "out", "type": "text/plain" }]
+      },
+      "permissions": { "storage": true, "secrets": [], "net": [] }
+    }
+  ]
+}
