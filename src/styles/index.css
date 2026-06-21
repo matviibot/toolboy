@@ -22,6 +22,22 @@ body {
   box-sizing: border-box;
 }
 
+/* home favourite tile — rests on the card shadow, floats up on hover. The lift
+   and shadow grow together so it reads as depth, not a flat smear. box-shadow is
+   set inline by Glass, so the hover state overrides with !important. */
+.tb-hometile {
+  transition: transform var(--dur-fast) var(--ease-out),
+              box-shadow var(--dur-fast) var(--ease-out) !important;
+  will-change: transform;
+}
+.tb-hometile--live:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-hover), var(--shadow-inset) !important;
+}
+.tb-hometile--live:active {
+  transform: translateY(-1px);
+}
+
 /* favourite (pin-to-home) star — brighten + seat on a soft chip on hover. The
    resting opacity/colour is set inline (FavStar) so the row can reveal it on select. */
 .tb-favstar:hover {

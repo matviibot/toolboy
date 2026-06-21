@@ -49,6 +49,7 @@ export function EntityRow({
     <div
       role="option"
       aria-selected={selected}
+      className="tb-entrow"
       style={{
         position: "relative",
         display: "flex",
@@ -94,18 +95,22 @@ export function EntityRow({
         <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0 }}>
           <span style={{ font: "var(--type-subhead)", color: "var(--fg-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</span>
           {isChain && (
-            <span style={{ font: "var(--type-kbd)", color: "var(--fg-3)", padding: "1px 6px", borderRadius: "var(--radius-pill)", background: "var(--glass-fill-strong)", border: "1px solid var(--glass-stroke)" }}>
+            <span style={{ font: "var(--type-kbd)", color: "var(--fg-3)", flex: "none", padding: "1px 6px", borderRadius: "var(--radius-pill)", background: "var(--glass-fill-strong)", border: "1px solid var(--glass-stroke)" }}>
               scene · {toolCount ?? 0}
             </span>
           )}
-          <OriginBadge origin={origin} style={{ marginLeft: "auto", flex: "none" }} />
         </div>
         {description && (
           <span style={{ font: "var(--type-caption)", color: "var(--fg-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{description}</span>
         )}
       </div>
 
-      {meta && selected && <span style={{ font: "var(--type-mono-sm)", color: "var(--fg-3)", flex: "none" }}>{meta}</span>}
+      {/* right rail: origin badge over the (selection-only) hotkey hint — stacked, not
+          crammed into the name row, so the name keeps full width. */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", gap: "4px", flex: "none" }}>
+        <OriginBadge origin={origin} />
+        {meta && selected && <span style={{ font: "var(--type-mono-sm)", color: "var(--fg-3)", whiteSpace: "nowrap" }}>{meta}</span>}
+      </div>
       {trailing}
     </div>
   );

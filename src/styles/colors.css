@@ -65,6 +65,8 @@
   --shadow-2: 0 6px 16px rgba(0,0,0,0.28), 0 2px 6px rgba(0,0,0,0.20);
   --shadow-3: 0 18px 48px rgba(0,0,0,0.40), 0 6px 16px rgba(0,0,0,0.28);
   --shadow-4: 0 40px 96px rgba(0,0,0,0.52), 0 12px 32px rgba(0,0,0,0.34);
+  /* card hover lift — only a touch above --shadow-2, theme-aware */
+  --shadow-hover: 0 8px 18px rgba(0,0,0,0.26), 0 2px 6px rgba(0,0,0,0.18);
   --shadow-inset: inset 0 1px 0 var(--glass-highlight);
 }
 
@@ -118,6 +120,7 @@
   --shadow-2: 0 6px 16px rgba(20,30,60,0.10), 0 2px 6px rgba(20,30,60,0.07);
   --shadow-3: 0 18px 48px rgba(20,30,60,0.14), 0 6px 16px rgba(20,30,60,0.09);
   --shadow-4: 0 40px 96px rgba(20,30,60,0.20), 0 12px 32px rgba(20,30,60,0.12);
+  --shadow-hover: 0 8px 18px rgba(20,30,60,0.10), 0 2px 6px rgba(20,30,60,0.06);
   --shadow-inset: inset 0 1px 0 var(--glass-highlight);
 }
 
