@@ -8,6 +8,16 @@ import { useEffect, useState } from "react";
 import { Glass, Input, Kbd, EntityRow, Icon } from "../components";
 import type { Entity } from "./types";
 import { discover, discoveryEnabled, type DiscoveryCard } from "../loader/discovery";
+import { parseSource } from "../loader/resolver";
+
+/** Does the query parse as a loadable gh: source the user can open directly? Returns
+    the trimmed spec, or null. Discovery is a finder; this is the "I already know the
+    repo" path — paste gh:owner/repo@ref to load it (private repos need a token). */
+function loadableSource(q: string): string | null {
+  const spec = q.trim();
+  if (!spec.startsWith("gh:")) return null;
+  try { parseSource(spec); return spec; } catch { return null; }
+}
 
 function score(name: string, description: string, kind: string, q: string): number {
   if (!q) return 1;
@@ -20,16 +30,20 @@ function score(name: string, description: string, kind: string, q: string): numb
   return i === needle.length ? 1 : 0;
 }
 
-type Item = { t: "local"; e: Entity } | { t: "remote"; c: DiscoveryCard };
+type Item =
+  | { t: "local"; e: Entity }
+  | { t: "remote"; c: DiscoveryCard }
+  | { t: "source"; spec: string };
 
 export interface PaletteProps {
   entities: Entity[];
   onPick: (entity: Entity, split: boolean) => void;
   onPickDiscovered: (card: DiscoveryCard) => void;
+  onLoadSource: (source: string) => void;
   onClose: () => void;
 }
 
-export function Palette({ entities, onPick, onPickDiscovered, onClose }: PaletteProps) {
+export function Palette({ entities, onPick, onPickDiscovered, onLoadSource, onClose }: PaletteProps) {
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(0);
   const [remote, setRemote] = useState<DiscoveryCard[]>([]);
@@ -65,11 +79,16 @@ export function Palette({ entities, onPick, onPickDiscovered, onClose }: Palette
     return true;
   });
 
+  // an explicit "load this repo" action when the query is a gh: source — pinned to the
+  // top so Enter loads it; offsets every other row's index by one.
+  const sourceSpec = loadableSource(q);
+  const offset = sourceSpec ? 1 : 0;
   const items: Item[] = [
+    ...(sourceSpec ? [{ t: "source", spec: sourceSpec } as Item] : []),
     ...localResults.map((e): Item => ({ t: "local", e })),
     ...remoteResults.map((c): Item => ({ t: "remote", c })),
   ];
-  const remoteStart = localResults.length;
+  const remoteStart = offset + localResults.length;
 
   useEffect(() => { setSel(0); }, [q]);
   // keep selection in range as async discovery results arrive
@@ -77,7 +96,8 @@ export function Palette({ entities, onPick, onPickDiscovered, onClose }: Palette
 
   const choose = (it: Item, split: boolean) => {
     if (it.t === "local") onPick(it.e, split);
-    else onPickDiscovered(it.c);
+    else if (it.t === "remote") onPickDiscovered(it.c);
+    else onLoadSource(it.spec);
   };
 
   useEffect(() => {
@@ -135,6 +155,21 @@ export function Palette({ entities, onPick, onPickDiscovered, onClose }: Palette
             </div>
           ) : (
             <>
+              {sourceSpec && (
+                <EntityRow
+                  key="__load_source__"
+                  kind="tool"
+                  name={`Load ${sourceSpec}`}
+                  description="Open this repository directly"
+                  origin="yours"
+                  toolCount={undefined}
+                  icon={<Icon name="git-branch" size={18} />}
+                  selected={0 === sel}
+                  onMouseEnter={() => setSel(0)}
+                  onClick={() => onLoadSource(sourceSpec)}
+                  meta="↵ load repo"
+                />
+              )}
               {localResults.map((e, i) => (
                 <EntityRow
                   key={e.id}
@@ -144,8 +179,8 @@ export function Palette({ entities, onPick, onPickDiscovered, onClose }: Palette
                   origin={e.origin}
                   toolCount={e.kind === "toolchain" ? e.tools.length : undefined}
                   icon={<Icon name={e.icon} size={18} />}
-                  selected={i === sel}
-                  onMouseEnter={() => setSel(i)}
+                  selected={offset + i === sel}
+                  onMouseEnter={() => setSel(offset + i)}
                   onClick={(ev) => onPick(e, ev.metaKey || ev.ctrlKey)}
                   meta={e.kind === "toolchain" ? "↵ open scene" : "↵ open · ⌘↵ split"}
                 />

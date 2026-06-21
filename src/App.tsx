@@ -319,6 +319,25 @@ export default function App() {
     }
   }, [registry, runOpen, pushToast]);
 
+  // load an arbitrary gh: source typed straight into the palette (private repos need
+  // VITE_GITHUB_TOKEN). Same trust path as discovery: load → merge → open the first
+  // entity through the trust gate; the rest join the registry for later search.
+  const loadSource = useCallback(async (source: string) => {
+    if (!registry) return;
+    setPalette(false);
+    pushToast(`Loading ${source}…`, "info");
+    try {
+      const reg = await loadRegistry(source);
+      if (reg.all.length === 0) { pushToast(`No tools found in ${reg.repoName || source}`, "error"); return; }
+      const merged = mergeRegistries(registry, reg);
+      setRegistry(merged);
+      pushToast(`Loaded ${reg.all.length} from ${reg.repoName}`, "info");
+      runOpen(reg.all[0], merged, false);
+    } catch (err) {
+      pushToast(`Couldn't load ${source}: ${err instanceof Error ? err.message : String(err)}`, "error");
+    }
+  }, [registry, runOpen, pushToast]);
+
   const onOutput = useCallback((uid: string, port: string, value: unknown) => {
     setPanes((ps) => {
       const targets = wires.filter((w) => w.from === uid && w.fromPort === port).map((w) => w.toPort && { uid: w.to, port: w.toPort });
@@ -399,7 +418,7 @@ export default function App() {
         </div>
       )}
 
-      {palette && registry && <Palette entities={registry.all} onClose={() => setPalette(false)} onPick={pick} onPickDiscovered={pickDiscovered} />}
+      {palette && registry && <Palette entities={registry.all} onClose={() => setPalette(false)} onPick={pick} onPickDiscovered={pickDiscovered} onLoadSource={loadSource} />}
 
       {trust && (
         <TrustDialog

@@ -49,7 +49,7 @@ async function fetchManifest(
     // the manifest is the mutable pointer — always read it fresh, never from the HTTP
     // cache, or a moved pointer (new commit / changed file) is invisible to revalidate.
     // Bundles are immutable + content-addressed, so they still cache aggressively.
-    const res = await fetch(resolved.manifestUrl, { cache: "no-store" });
+    const res = await fetch(resolved.manifestUrl, { cache: "no-store", headers: resolved.headers });
     if (!res.ok) throw new Error(`manifest fetch ${res.status}`);
     const manifest = parseManifest(await res.json());
     const pin = await effectivePin(src, resolved, manifest);
@@ -69,7 +69,7 @@ async function loadBundle(resolved: Resolved, tool: ToolEntity): Promise<string>
     const hit = await cache.getBundle(tool.integrity);
     if (hit) return hit;
   }
-  const res = await fetch(resolved.entryUrl(tool.entry));
+  const res = await fetch(resolved.entryUrl(tool.entry), { headers: resolved.headers });
   if (!res.ok) throw new Error(`bundle ${tool.entry}: ${res.status}`);
   const text = await res.text();
   if (tool.integrity) {
@@ -224,7 +224,7 @@ export async function revalidate(
 ): Promise<RegistryUpdate | null> {
   const src = parseSource(current.source);
   const resolved = await resolveSource(src);
-  const res = await fetch(resolved.manifestUrl, { cache: "no-store" });
+  const res = await fetch(resolved.manifestUrl, { cache: "no-store", headers: resolved.headers });
   if (!res.ok) throw new Error(`manifest fetch ${res.status}`);
   const manifest = parseManifest(await res.json());
   const pin = await effectivePin(src, resolved, manifest);

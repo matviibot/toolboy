@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import {
-  ArrowRight, Box, Braces, Check, Columns2, Command, Database, Download, Globe,
-  Info, Key, KeyRound, ListTree, Lock, Moon, Pipette, Regex, Search, Shield,
+  ArrowRight, Box, Braces, Check, Columns2, Command, Database, Download, GitBranch,
+  Globe, Info, Key, KeyRound, ListTree, Lock, Moon, Pipette, Regex, Search, Shield,
   ShieldCheck, Sparkles, Sun, Workflow, X, type LucideIcon,
 } from "lucide-react";
 
@@ -22,6 +22,7 @@ const REGISTRY: Record<string, LucideIcon> = {
   command: Command,
   database: Database,
   download: Download,
+  "git-branch": GitBranch,
   globe: Globe,
   info: Info,
   key: Key,

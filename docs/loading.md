@@ -34,6 +34,34 @@ commit than what I've pinned?"
    never a silent version change — the manifest pointer is promoted to the cache only on
    accept. (This is the same update step the toolchain loader uses.)
 
+## Source resolution (public vs. private)
+
+A `gh:owner/repo@ref` source first resolves its ref → a commit SHA (the pin) via the
+GitHub commits API, then reads `toolboy.json` + each bundle at that exact commit. *How*
+those bytes are read depends on whether a token is configured (`src/loader/resolver.ts`):
+
+- **Public repos (default, anonymous).** Files are read from `raw.githubusercontent.com`
+  at the pinned commit — cache-friendly and unauthenticated. This is the zero-config path.
+- **Private repos (with a token).** Set `VITE_GITHUB_TOKEN` (a GitHub PAT with
+  `Contents: read` on the repo). The loader then sends `Authorization: Bearer …` and reads
+  through the authenticated **Contents API** with the raw media type — which, unlike
+  `raw.githubusercontent.com`, honors the token and so can read private repos. Without a
+  token a private repo simply 404s (GitHub hides it), and the load is skipped. `api.github.com`
+  is CORS-enabled, so this works from the browser. ⚠️ `VITE_*` vars are inlined into the
+  built bundle — only use a token for a personal/local build; never ship it. See
+  [`.env.example`](../.env.example).
+
+Either way the manifest poll and bundle fetches carry the same headers, so revalidation
+of a private source works identically to a public one.
+
+### Loading a source directly
+
+The ⌘K palette is primarily a search over loaded entities + the discovery index, but
+typing a full `gh:owner/repo@ref[#subpath]` surfaces a **"Load …"** action that opens
+that repo directly through the normal loader + trust gate — no discovery index required
+(`src/shell/Palette.tsx` → `App.loadSource`). This is the "I already know the repo" path,
+and the only way to load a *private* repo (discovery never indexes private entities).
+
 ## Caching
 
 - **Bundle cache** is content-addressed by commit/hash → only ever *adds* versions, never
