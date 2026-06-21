@@ -6,6 +6,7 @@
   "description": "A personal toolbox — calm glass surface, ⌘K palette, split panes, sandboxed tools.",
   "scripts": {
     "dev": "vite",
+    "up": "bash scripts/dev.sh",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
