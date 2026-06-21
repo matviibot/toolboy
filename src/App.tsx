@@ -91,14 +91,11 @@ function HomeTile({ fav, entity, onOpen, onRemove }: { fav: Favourite; entity: E
       elevation="card"
       origin={available && origin === "public" ? "public" : undefined}
       onClick={available ? onOpen : undefined}
-      className="tb-hometile"
+      className={available ? "tb-hometile tb-hometile--live" : "tb-hometile"}
       style={{
         position: "relative", width: 150, padding: 14, display: "flex", flexDirection: "column", gap: 10,
         cursor: available ? "pointer" : "default", opacity: available ? 1 : 0.55,
-        transition: "transform var(--dur-fast) var(--ease-out)",
       }}
-      onMouseEnter={(ev) => available && (ev.currentTarget.style.transform = "translateY(-3px)")}
-      onMouseLeave={(ev) => (ev.currentTarget.style.transform = "translateY(0)")}
     >
       <div style={{ position: "absolute", top: 6, right: 6, zIndex: 1 }} className="tb-hometile-star">
         <FavStar on onToggle={onRemove} size={14} subtle title="Remove from home" />
@@ -131,7 +128,7 @@ function HomeSurface({ favourites, entityById, onOpen, onRemove }: {
         </div>
       </div>
       {!empty && (
-        <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap", justifyContent: "center", maxWidth: 660, maxHeight: "42vh", overflowY: "auto" }}>
+        <div style={{ display: "flex", gap: 12, marginTop: 6, padding: 16, flexWrap: "wrap", justifyContent: "center", maxWidth: 692, maxHeight: "46vh", overflowY: "auto", overflowX: "hidden" }}>
           {favourites.map((fav) => {
             const entity = entityById.get(fav.id);
             return <HomeTile key={fav.id} fav={fav} entity={entity} onOpen={() => entity && onOpen(entity, false)} onRemove={() => onRemove(fav)} />;
