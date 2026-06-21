@@ -68,20 +68,22 @@ npm run build      # typecheck + production build
 - `src/loader/` — the **manifest loader**: fetch a repo's `toolboy.json`, validate
   it, SRI-verify each tool bundle, cache it content-addressed, and produce the
   shell's entities. Git source (`gh:owner/repo@ref[#subpath]`, commit-pinned) + a
-  same-origin resolver for the bundled registry. Public repos load anonymously; for a
+  same-origin resolver for static sources. Public repos load anonymously; for a
   **private** repo set `VITE_GITHUB_TOKEN` and the loader reads via GitHub's
   authenticated Contents API (see [`.env.example`](.env.example)). See
   [docs/manifest.md](docs/manifest.md) and [docs/loading.md](docs/loading.md).
 - `src/runtime/` — the **boundary**: tools run for real in cross-origin sandboxed
   iframes, with `ctx` (storage / secrets / net / bus / ui) proxied over a
   MessagePort the host mediates. See [docs/runtime.md](docs/runtime.md).
-- `public/registry/` — the bundled demo registry the app boots from: a real
-  `toolboy.json` + the tool bundles, each with a verified SRI hash.
+- `src/shell/favourites.ts` — the home screen is *yours*: it ships no built-in tools.
+  You favourite (★) tools from any loaded repo to pin them to home; favourites persist
+  and their repos are reloaded at boot.
 - `src/App.tsx` — orchestrator: boot/load, theme, panes, wiring, palette, trust gate.
 
-> The registry is the source of truth: entities are loaded from `toolboy.json` at
-> boot, not hardcoded. Each tool bundle is fetched, SRI-verified (a tampered bundle
-> is rejected, never run), and content-addressed for offline. Every tool then runs
+> There are no default tools. The app starts empty and grows as you load repos — via
+> the ⌘K discovery index, by pasting a `gh:` source, and at boot from your favourites.
+> Each tool bundle is fetched, SRI-verified (a tampered bundle is rejected, never run),
+> and content-addressed for offline. Every tool then runs
 > in an opaque-origin sandboxed iframe with `connect-src 'none'`, reaching the world
 > only through `ctx`. The bundled tools are real tools authored against that contract.
 
@@ -103,8 +105,9 @@ classic script), or write a framework-free tool directly. See
 Manifest loader + runtime boundary + background revalidation implemented. Entities
 load from a git `toolboy.json` (fetch → validate → SRI-verify → content-addressed
 cache → render); tools run in sandboxed iframes behind the host-mediated `ctx` bridge
-(storage, secrets, net allowlist + injection, bus, ui). The bundled `public/registry/`
-is the boot source; the `gh:` resolver pins to a commit. Public repos load anonymously;
+(storage, secrets, net allowlist + injection, bus, ui). The app ships no default tools —
+home is built from your favourites, whose repos are reloaded at boot; the `gh:` resolver
+pins each to a commit. Public repos load anonymously;
 a private repo loads when `VITE_GITHUB_TOKEN` is set (read via GitHub's authenticated
 Contents API). Typing a `gh:` source into the ⌘K palette loads that repo directly through
 the trust gate — the only path for a private repo, since discovery never indexes private

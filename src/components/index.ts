@@ -13,6 +13,8 @@ export { Input } from "./Input";
 export type { InputProps } from "./Input";
 export { EntityRow } from "./EntityRow";
 export type { EntityRowProps } from "./EntityRow";
+export { FavStar } from "./FavStar";
+export type { FavStarProps } from "./FavStar";
 export { OriginBadge } from "./OriginBadge";
 export type { OriginBadgeProps, Origin } from "./OriginBadge";
 export { Port } from "./Port";

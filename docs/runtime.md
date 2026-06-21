@@ -82,11 +82,12 @@ toolboy.tool((ctx, root) => {
 });
 ```
 
-The bundled demo tools in `src/runtime/tools/` are the real thing, authored against this
-contract: `color` (storage + emit + toast), `fetcher` (real `ctx.net` GET, allowlisted),
-`jq` (input port + filter + storage), `jsonview` (sink), and two deliberately *foreign*
-tools — `summarize` (declares `OPENAI_API_KEY`; host injects it; falls back to a stub when
-the keyring is empty) and `regex` — that look nothing like toolboy yet sit inside the frame.
+Real tools authored against this contract look like the set that once shipped as the demo
+registry (now removed — the app ships no built-in tools): `color` (storage + emit + toast),
+`fetcher` (real `ctx.net` GET, allowlisted), `jq` (input port + filter + storage),
+`jsonview` (sink), and two deliberately *foreign* tools — `summarize` (declares
+`OPENAI_API_KEY`; host injects it; falls back to a stub when the keyring is empty) and
+`regex` — that look nothing like toolboy yet sit inside the frame.
 
 ## What's next
 

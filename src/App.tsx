@@ -2,33 +2,41 @@
    trust chrome. Entities are loaded from a git manifest (toolboy.json) at boot —
    the registry is the source of truth, not a hardcoded dataset. Home → palette →
    tool / toolchain → split → wire → trust. */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { Button, Glass, IconButton, Kbd, Icon } from "./components";
+import { Button, Glass, IconButton, Kbd, FavStar, Icon } from "./components";
 import markUrl from "./assets/logo/toolboy-mark.svg";
-import { aggregatePerms, loadRegistry, revalidate, type LoadedRegistry, type LoadIssue, type RegistryUpdate } from "./loader/load";
+import { aggregatePerms, loadRegistry, revalidate, type LoadedRegistry, type RegistryUpdate } from "./loader/load";
 import { keyring } from "./runtime/keyring";
 import { originColors } from "./shell/origin";
-import type { AggPerms, Entity, Pane, Perms, Wire } from "./shell/types";
+import type { AggPerms, Entity, Pane, Perms, Tool, Wire } from "./shell/types";
 import { Palette } from "./shell/Palette";
 import { SplitSurface } from "./shell/Panes";
 import { TrustDialog, type TrustSubject } from "./shell/Trust";
+import { loadFavourites, saveFavourites, toggleFavourite, type Favourite } from "./shell/favourites";
 import type { DiscoveryCard } from "./loader/discovery";
-
-/** the manifest the app boots from — the bundled demo registry, served same-origin */
-const BOOT_SOURCE = "self";
 
 let UID = 1;
 const mkPane = (toolId: string): Pane => ({ uid: "p" + UID++, toolId, inputs: {}, lastOutputs: {} });
 const equalize = (n: number) => Array(n).fill(100 / n) as number[];
 
-/** Fold a discovered entity's repo into the live registry so its panes can resolve.
-    The boot source/pin identity is preserved (that's what revalidate keeps polling);
-    discovered entities just join the in-memory list until the next reload. */
-function mergeRegistries(base: LoadedRegistry, add: LoadedRegistry): LoadedRegistry {
-  const byId = new Map(base.all.map((e) => [e.id, e]));
-  for (const e of add.all) byId.set(e.id, e); // freshly-loaded version wins for a shared id
-  return { ...base, all: [...byId.values()], toolsById: { ...base.toolsById, ...add.toolsById } };
+/** A flat read-model over every loaded repo: the palette searches `all`, panes resolve
+    tools via `toolsById`. There is no built-in registry — the app starts empty and
+    grows as the user loads repos (favourites at boot, discovery/load-by-source after). */
+interface MergedRegistry {
+  all: Entity[];
+  toolsById: Record<string, Tool>;
+}
+
+/** Merge the per-source registries into one view; a later source wins a shared id. */
+function mergeAll(regs: Record<string, LoadedRegistry>): MergedRegistry {
+  const byId = new Map<string, Entity>();
+  const toolsById: Record<string, Tool> = {};
+  for (const r of Object.values(regs)) {
+    for (const e of r.all) byId.set(e.id, e);
+    Object.assign(toolsById, r.toolsById);
+  }
+  return { all: [...byId.values()], toolsById };
 }
 
 /** would adding from→to close a directed loop? (to already reaches from, or self) */
@@ -57,46 +65,79 @@ interface TrustState {
   action: () => void;
 }
 
-function BootSurface({ error }: { error: string | null }) {
+function BootSurface() {
   return (
     <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 18 }}>
-      <img src={markUrl} width={64} height={64} alt="toolboy" style={{ filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.35))", animation: error ? "none" : "tbPulse 1.6s var(--ease-in-out) infinite" }} />
-      <div style={{ font: "var(--type-body)", color: error ? "var(--danger)" : "var(--fg-3)", textAlign: "center", maxWidth: 420 }}>
-        {error ? `Couldn't load your toolbox — ${error}` : "Loading your toolbox…"}
-      </div>
+      <img src={markUrl} width={64} height={64} alt="toolboy" style={{ filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.35))", animation: "tbPulse 1.6s var(--ease-in-out) infinite" }} />
+      <div style={{ font: "var(--type-body)", color: "var(--fg-3)", textAlign: "center", maxWidth: 420 }}>Loading your toolbox…</div>
     </div>
   );
 }
 
-function HomeSurface({ entities, onOpen }: { entities: Entity[]; onOpen: (e: Entity, split: boolean) => void }) {
-  // promote scenes ahead of plain tools so a toolchain is reachable from home
-  const pinned = [...entities].sort((a, b) => Number(b.kind === "toolchain") - Number(a.kind === "toolchain")).slice(0, 6);
+/** A single home tile. A favourite resolves to a live entity (clickable, origin-tinted)
+    or — if its repo didn't load (private without a token, offline, deleted) — renders
+    a dimmed "unavailable" card you can still unpin. The star unpins on hover. */
+function HomeTile({ fav, entity, onOpen, onRemove }: { fav: Favourite; entity: Entity | undefined; onOpen: () => void; onRemove: () => void }) {
+  const available = !!entity;
+  const origin = entity?.origin ?? "yours";
+  const icon = entity?.icon ?? fav.icon;
+  const sub = !available
+    ? "unavailable"
+    : entity!.kind === "toolchain"
+      ? "scene · " + entity!.tools.length
+      : "tool";
   return (
-    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28, animation: "tbFade var(--dur-slow) var(--ease-out)" }}>
+    <Glass
+      elevation="card"
+      origin={available && origin === "public" ? "public" : undefined}
+      onClick={available ? onOpen : undefined}
+      className="tb-hometile"
+      style={{
+        position: "relative", width: 150, padding: 14, display: "flex", flexDirection: "column", gap: 10,
+        cursor: available ? "pointer" : "default", opacity: available ? 1 : 0.55,
+        transition: "transform var(--dur-fast) var(--ease-out)",
+      }}
+      onMouseEnter={(ev) => available && (ev.currentTarget.style.transform = "translateY(-3px)")}
+      onMouseLeave={(ev) => (ev.currentTarget.style.transform = "translateY(0)")}
+    >
+      <div style={{ position: "absolute", top: 6, right: 6, zIndex: 1 }} className="tb-hometile-star">
+        <FavStar on onToggle={onRemove} size={14} subtle title="Remove from home" />
+      </div>
+      <span style={{ display: "inline-grid", placeItems: "center", width: 32, height: 32, borderRadius: "var(--radius-sm)", background: originColors(origin).soft, color: originColors(origin).fg }}>
+        <Icon name={icon} size={17} />
+      </span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0 }}>
+        <span style={{ font: "var(--type-label)", color: "var(--fg-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{entity?.name ?? fav.name}</span>
+        <span style={{ font: "var(--type-caption)", color: "var(--fg-4)" }}>{sub}</span>
+      </div>
+    </Glass>
+  );
+}
+
+function HomeSurface({ favourites, entityById, onOpen, onRemove }: {
+  favourites: Favourite[];
+  entityById: Map<string, Entity>;
+  onOpen: (e: Entity, split: boolean) => void;
+  onRemove: (fav: Favourite) => void;
+}) {
+  const empty = favourites.length === 0;
+  return (
+    <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28, padding: 24, boxSizing: "border-box", animation: "tbFade var(--dur-slow) var(--ease-out)" }}>
       <img src={markUrl} width={76} height={76} alt="toolboy" style={{ filter: "drop-shadow(0 12px 28px rgba(0,0,0,0.35))" }} />
       <div style={{ textAlign: "center", display: "flex", flexDirection: "column", gap: 10 }}>
         <div style={{ font: "var(--type-display)", fontSize: 44, letterSpacing: "var(--tracking-tight)", color: "var(--fg-1)" }}>toolboy</div>
         <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, font: "var(--type-body)", color: "var(--fg-3)" }}>
-          Press <Kbd>⌘</Kbd><Kbd>K</Kbd> to summon a tool
+          {empty ? <>Press <Kbd>⌘</Kbd><Kbd>K</Kbd> to find a tool, then ★ it to pin it here</> : <>Press <Kbd>⌘</Kbd><Kbd>K</Kbd> to summon a tool</>}
         </div>
       </div>
-      <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap", justifyContent: "center", maxWidth: 620 }}>
-        {pinned.map((e) => (
-          <Glass key={e.id} elevation="card" origin={e.origin === "public" ? "public" : undefined}
-            onClick={() => onOpen(e, false)}
-            style={{ width: 138, padding: 14, cursor: "pointer", display: "flex", flexDirection: "column", gap: 10, transition: "transform var(--dur-fast) var(--ease-out)" }}
-            onMouseEnter={(ev) => (ev.currentTarget.style.transform = "translateY(-3px)")}
-            onMouseLeave={(ev) => (ev.currentTarget.style.transform = "translateY(0)")}>
-            <span style={{ display: "inline-grid", placeItems: "center", width: 32, height: 32, borderRadius: "var(--radius-sm)", background: originColors(e.origin).soft, color: originColors(e.origin).fg }}>
-              <Icon name={e.icon} size={17} />
-            </span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-              <span style={{ font: "var(--type-label)", color: "var(--fg-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{e.name}</span>
-              <span style={{ font: "var(--type-caption)", color: "var(--fg-4)" }}>{e.kind === "toolchain" ? "scene · " + e.tools.length : "tool"}</span>
-            </div>
-          </Glass>
-        ))}
-      </div>
+      {!empty && (
+        <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap", justifyContent: "center", maxWidth: 660, maxHeight: "42vh", overflowY: "auto" }}>
+          {favourites.map((fav) => {
+            const entity = entityById.get(fav.id);
+            return <HomeTile key={fav.id} fav={fav} entity={entity} onOpen={() => entity && onOpen(entity, false)} onRemove={() => onRemove(fav)} />;
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -160,8 +201,11 @@ function UpdateBanner({ update, onApply, onDismiss }: { update: RegistryUpdate; 
 
 export default function App() {
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const [registry, setRegistry] = useState<LoadedRegistry | null>(null);
-  const [bootError, setBootError] = useState<string | null>(null);
+  // one LoadedRegistry per loaded source spec; the merged view is derived. Starts empty
+  // — there are no default tools, only repos the user loads (favourites, discovery, …).
+  const [regs, setRegs] = useState<Record<string, LoadedRegistry>>({});
+  const [booted, setBooted] = useState(false);
+  const [favourites, setFavourites] = useState<Favourite[]>(() => loadFavourites());
   const [panes, setPanes] = useState<Pane[]>([]);
   const [sizes, setSizes] = useState<number[]>([]);
   const [wires, setWires] = useState<Wire[]>([]);
@@ -178,17 +222,37 @@ export default function App() {
 
   useEffect(() => { document.documentElement.setAttribute("data-theme", theme); }, [theme]);
 
-  // boot: load the registry from its git manifest
+  // derived read-models over the loaded repos
+  const registry = useMemo(() => mergeAll(regs), [regs]);
+  const entityById = useMemo(() => new Map(registry.all.map((e) => [e.id, e])), [registry]);
+  // which source each entity came from — needed to record a favourite's reload pointer
+  const sourceById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const [src, r] of Object.entries(regs)) for (const e of r.all) m[e.id] = src;
+    return m;
+  }, [regs]);
+  const favIds = useMemo(() => new Set(favourites.map((f) => f.id)), [favourites]);
+
+  // boot: there's no default registry — reload the repos behind the user's favourites
+  // (the home screen) so their tiles resolve. Each source is independent; one failing
+  // (private without a token, offline) just leaves its tiles "unavailable", never blocks.
   useEffect(() => {
     let live = true;
-    const issues: LoadIssue[] = [];
-    loadRegistry(BOOT_SOURCE, (i) => issues.push(i))
-      .then((reg) => {
-        if (!live) return;
-        setRegistry(reg);
-        issues.forEach((i) => console.warn(`[toolboy] skipped "${i.id}": ${i.reason}`));
-      })
-      .catch((err) => { if (live) setBootError(err instanceof Error ? err.message : String(err)); });
+    const sources = [...new Set(loadFavourites().map((f) => f.source))];
+    if (sources.length === 0) { setBooted(true); return; }
+    Promise.all(
+      sources.map((s) =>
+        loadRegistry(s, (i) => console.warn(`[toolboy] skipped "${i.id}": ${i.reason}`))
+          .then((r) => [s, r] as const)
+          .catch((err) => { console.warn(`[toolboy] couldn't load ${s}:`, err instanceof Error ? err.message : err); return null; }),
+      ),
+    ).then((results) => {
+      if (!live) return;
+      const map: Record<string, LoadedRegistry> = {};
+      for (const r of results) if (r) map[r[0]] = r[1];
+      setRegs(map);
+      setBooted(true);
+    });
     return () => { live = false; };
   }, []);
 
@@ -200,16 +264,22 @@ export default function App() {
   const polling = useRef(false);                    // in-flight guard — no overlapping polls
   useEffect(() => { updatePin.current = update?.pin ?? null; }, [update]);
   useEffect(() => {
-    if (!registry) return;
+    const sources = Object.keys(regs);
+    if (sources.length === 0) return;
     let live = true;
     const poll = async () => {
       if (polling.current || !navigator.onLine || document.visibilityState !== "visible") return;
       polling.current = true;
       try {
-        const found = await revalidate(registry, (i) => console.warn(`[toolboy] update skipped "${i.id}": ${i.reason}`));
-        if (!live || !found) return;
-        if (found.pin === dismissedPin.current || found.pin === updatePin.current) return;
-        setUpdate(found);
+        // each loaded repo is polled independently; surface the first update found and
+        // let the user act on it before checking the rest (one banner at a time).
+        for (const s of sources) {
+          const found = await revalidate(regs[s], (i) => console.warn(`[toolboy] update skipped "${i.id}": ${i.reason}`));
+          if (!live || !found) continue;
+          if (found.pin === dismissedPin.current || found.pin === updatePin.current) continue;
+          setUpdate(found);
+          break;
+        }
       } catch (err) {
         console.warn("[toolboy] revalidate failed:", err instanceof Error ? err.message : err);
       } finally {
@@ -226,13 +296,14 @@ export default function App() {
       window.removeEventListener("online", poll);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [registry]);
+  }, [regs]);
 
   const applyUpdate = useCallback(async () => {
     if (!update) return;
     await update.commit();          // promote the new pointer so the next boot starts here
     dismissedPin.current = null;
-    setRegistry(update.registry);   // swap in the prepared, bundle-verified registry
+    // swap in the prepared, bundle-verified registry for just that source
+    setRegs((prev) => ({ ...prev, [update.registry.source]: update.registry }));
     setUpdate(null);
     pushToast("Tools updated", "success");
   }, [update, pushToast]);
@@ -271,7 +342,7 @@ export default function App() {
 
   // shared open path: trust-gate an entity against a registry, then open/split it.
   // Used by both the local palette pick and the discovered-entity flow.
-  const runOpen = useCallback((entity: Entity, reg: LoadedRegistry, split: boolean) => {
+  const runOpen = useCallback((entity: Entity, reg: MergedRegistry, split: boolean) => {
     const doOpen = () => {
       if (entity.kind === "toolchain") { openToolchain(entity); return; }
       if (split) addPane(entity.id); else openSingle(entity.id);
@@ -293,50 +364,58 @@ export default function App() {
 
   // pick from palette / home
   const pick = useCallback((entity: Entity, split: boolean) => {
-    if (!registry) return;
+    if (!booted) return;
     setPalette((cur) => {
       const splitFrom = typeof cur === "object" && cur && "splitFrom" in cur;
       runOpen(entity, registry, splitFrom || split);
       return false; // close palette
     });
-  }, [registry, runOpen]);
+  }, [booted, registry, runOpen]);
+
+  // pin/unpin an entity to the home screen. `sourceById` tells us which repo to record
+  // so the favourite can be reloaded at boot; removal needs no source.
+  const toggleFav = useCallback((entity: { id: string; name: string; icon: string; kind: "tool" | "toolchain" }) => {
+    setFavourites((favs) => {
+      const next = toggleFavourite(favs, entity, sourceById[entity.id]);
+      saveFavourites(next);
+      return next;
+    });
+  }, [sourceById]);
 
   // pick a discovered entity: load its source repo through the normal loader (the
-  // index is a finder, not a trust shortcut), merge it in, then open via the trust gate
+  // index is a finder, not a trust shortcut), add it, then open via the trust gate
   const pickDiscovered = useCallback(async (card: DiscoveryCard) => {
-    if (!registry) return;
+    if (!booted) return;
     setPalette(false);
     pushToast(`Loading ${card.name} from ${card.repoName}…`, "info");
     try {
       const reg = await loadRegistry(card.source);
       const entity = reg.all.find((e) => e.id === card.id);
       if (!entity) { pushToast(`Couldn't find “${card.name}” in ${card.repoName}`, "error"); return; }
-      const merged = mergeRegistries(registry, reg);
-      setRegistry(merged);
-      runOpen(entity, merged, false);
+      setRegs((prev) => ({ ...prev, [reg.source]: reg }));
+      runOpen(entity, reg, false);
     } catch (err) {
       pushToast(`Couldn't load “${card.name}”: ${err instanceof Error ? err.message : String(err)}`, "error");
     }
-  }, [registry, runOpen, pushToast]);
+  }, [booted, runOpen, pushToast]);
 
   // load an arbitrary gh: source typed straight into the palette (private repos need
-  // VITE_GITHUB_TOKEN). Same trust path as discovery: load → merge → open the first
+  // VITE_GITHUB_TOKEN). Same trust path as discovery: load → add → open the first
   // entity through the trust gate; the rest join the registry for later search.
   const loadSource = useCallback(async (source: string) => {
-    if (!registry) return;
+    if (!booted) return;
     setPalette(false);
     pushToast(`Loading ${source}…`, "info");
     try {
       const reg = await loadRegistry(source);
       if (reg.all.length === 0) { pushToast(`No tools found in ${reg.repoName || source}`, "error"); return; }
-      const merged = mergeRegistries(registry, reg);
-      setRegistry(merged);
+      setRegs((prev) => ({ ...prev, [reg.source]: reg }));
       pushToast(`Loaded ${reg.all.length} from ${reg.repoName}`, "info");
-      runOpen(reg.all[0], merged, false);
+      runOpen(reg.all[0], reg, false);
     } catch (err) {
       pushToast(`Couldn't load ${source}: ${err instanceof Error ? err.message : String(err)}`, "error");
     }
-  }, [registry, runOpen, pushToast]);
+  }, [booted, runOpen, pushToast]);
 
   const onOutput = useCallback((uid: string, port: string, value: unknown) => {
     setPanes((ps) => {
@@ -373,7 +452,6 @@ export default function App() {
     setWires((ws) => ws.filter((w) => w.from !== uid && w.to !== uid));
   }, []);
 
-  const booted = !!registry;
   const home = panes.length === 0;
 
   return (
@@ -397,9 +475,9 @@ export default function App() {
 
       {/* surface body */}
       {!booted ? (
-        <BootSurface error={bootError} />
+        <BootSurface />
       ) : home ? (
-        <HomeSurface entities={registry.all} onOpen={pick} />
+        <HomeSurface favourites={favourites} entityById={entityById} onOpen={pick} onRemove={toggleFav} />
       ) : (
         <div style={{ position: "absolute", inset: 0, padding: "62px 20px 20px", boxSizing: "border-box" }}>
           <SplitSurface
@@ -407,6 +485,8 @@ export default function App() {
             toolsById={registry.toolsById}
             wires={wires}
             sizes={sizes}
+            favIds={favIds}
+            onToggleFav={toggleFav}
             onResize={setSizes}
             onClose={closePane}
             onSplit={(uid) => setPalette({ splitFrom: uid })}
@@ -418,7 +498,7 @@ export default function App() {
         </div>
       )}
 
-      {palette && registry && <Palette entities={registry.all} onClose={() => setPalette(false)} onPick={pick} onPickDiscovered={pickDiscovered} onLoadSource={loadSource} />}
+      {palette && booted && <Palette entities={registry.all} favIds={favIds} onClose={() => setPalette(false)} onPick={pick} onToggleFav={toggleFav} onPickDiscovered={pickDiscovered} onLoadSource={loadSource} />}
 
       {trust && (
         <TrustDialog

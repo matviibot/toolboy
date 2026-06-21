@@ -16,8 +16,10 @@ export interface EntityRowProps extends Omit<HTMLAttributes<HTMLDivElement>, "ti
   origin?: Origin;
   /** toolchain: number of tools in the scene */
   toolCount?: number;
-  /** optional right-aligned mono meta (e.g. "⌘↵ split") */
+  /** optional right-aligned mono meta (e.g. "⌘↵ split"), shown only when selected */
   meta?: string;
+  /** optional trailing control (e.g. a favourite star), always rendered */
+  trailing?: ReactNode;
   selected?: boolean;
 }
 
@@ -29,6 +31,7 @@ export function EntityRow({
   origin = "yours",
   toolCount,
   meta,
+  trailing,
   selected = false,
   style,
   ...rest
@@ -103,6 +106,7 @@ export function EntityRow({
       </div>
 
       {meta && selected && <span style={{ font: "var(--type-mono-sm)", color: "var(--fg-3)", flex: "none" }}>{meta}</span>}
+      {trailing}
     </div>
   );
 }
