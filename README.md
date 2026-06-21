@@ -67,9 +67,11 @@ npm run build      # typecheck + production build
   (permission + secret chrome).
 - `src/loader/` — the **manifest loader**: fetch a repo's `toolboy.json`, validate
   it, SRI-verify each tool bundle, cache it content-addressed, and produce the
-  shell's entities. Git source (`gh:owner/repo@ref`, commit-pinned) + a same-origin
-  resolver for the bundled registry. See [docs/manifest.md](docs/manifest.md) and
-  [docs/loading.md](docs/loading.md).
+  shell's entities. Git source (`gh:owner/repo@ref[#subpath]`, commit-pinned) + a
+  same-origin resolver for the bundled registry. Public repos load anonymously; for a
+  **private** repo set `VITE_GITHUB_TOKEN` and the loader reads via GitHub's
+  authenticated Contents API (see [`.env.example`](.env.example)). See
+  [docs/manifest.md](docs/manifest.md) and [docs/loading.md](docs/loading.md).
 - `src/runtime/` — the **boundary**: tools run for real in cross-origin sandboxed
   iframes, with `ctx` (storage / secrets / net / bus / ui) proxied over a
   MessagePort the host mediates. See [docs/runtime.md](docs/runtime.md).
@@ -102,10 +104,13 @@ Manifest loader + runtime boundary + background revalidation implemented. Entiti
 load from a git `toolboy.json` (fetch → validate → SRI-verify → content-addressed
 cache → render); tools run in sandboxed iframes behind the host-mediated `ctx` bridge
 (storage, secrets, net allowlist + injection, bus, ui). The bundled `public/registry/`
-is the boot source; the `gh:` resolver pins to a commit. While online and visible, the
-loader polls the source's mutable pointer in the background and surfaces a passive
-"updates available" affordance — applied only on accept, never silently
-(stale-while-revalidate; see [docs/loading.md](docs/loading.md)).
+is the boot source; the `gh:` resolver pins to a commit. Public repos load anonymously;
+a private repo loads when `VITE_GITHUB_TOKEN` is set (read via GitHub's authenticated
+Contents API). Typing a `gh:` source into the ⌘K palette loads that repo directly through
+the trust gate — the only path for a private repo, since discovery never indexes private
+entities. While online and visible, the loader polls the source's mutable pointer in the
+background and surfaces a passive "updates available" affordance — applied only on accept,
+never silently (stale-while-revalidate; see [docs/loading.md](docs/loading.md)).
 
 The [backend](backend/) is implemented: a stateless `net` relay (CORS fallback,
 SSRF-guarded, per-IP rate-limited) and a discovery index (`/publish` crawl, gated by

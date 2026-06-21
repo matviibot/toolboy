@@ -126,7 +126,14 @@ A repo declares **entities**. Two kinds today — `tool` (code) and `toolchain`
 ### `source` grammar (toolchain tool refs)
 - `"self"` — an entity in this same manifest
 - `"gh:owner/repo@ref"` — GitHub; `ref` is a commit (pinned) or branch (floating)
-- `"git+https://host/path.git#ref"` — generic git fallback
+- `"gh:owner/repo@ref#subpath"` — same, but the manifest lives in an in-repo
+  subdirectory (the `ref` may itself contain `/`, e.g. `feat/x`; the `#` fences off the
+  optional subpath)
+- `"git+https://host/path.git#ref"` — generic git fallback (not yet implemented)
+
+> **Private repos** load too: set `VITE_GITHUB_TOKEN` (a PAT with `Contents: read`) and
+> the loader reads via GitHub's authenticated Contents API instead of anonymous raw.
+> See [loading.md](loading.md#source-resolution-public-vs-private).
 
 ## Decided
 
