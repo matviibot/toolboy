@@ -6,7 +6,7 @@
    gets its own nub, and wires are qualified by the exact (pane, port) they join. */
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
-import { Glass, IconButton, OriginBadge, Icon } from "../components";
+import { Glass, IconButton, OriginBadge, FavStar, Icon } from "../components";
 import type { Pane, Tool, Wire } from "./types";
 import { originColors } from "./origin";
 import { SandboxedTool } from "../runtime/SandboxedTool";
@@ -124,7 +124,7 @@ function WireLayer({ wires, link, flow, containerRef, tick }: {
   );
 }
 
-function PaneHeader({ tool, onSplit, onClose, single }: { tool: Tool; onSplit: () => void; onClose: () => void; single: boolean }) {
+function PaneHeader({ tool, fav, onToggleFav, onSplit, onClose, single }: { tool: Tool; fav: boolean; onToggleFav: () => void; onSplit: () => void; onClose: () => void; single: boolean }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 10px 9px 13px", borderBottom: "1px solid var(--glass-stroke)", flex: "none" }}>
       <span style={{ display: "inline-grid", placeItems: "center", width: 26, height: 26, borderRadius: "var(--radius-xs)", background: originColors(tool.origin).soft, color: originColors(tool.origin).fg, flex: "none" }}>
@@ -132,7 +132,8 @@ function PaneHeader({ tool, onSplit, onClose, single }: { tool: Tool; onSplit: (
       </span>
       <span style={{ font: "var(--type-label)", color: "var(--fg-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{tool.name}</span>
       <OriginBadge origin={tool.origin} style={{ flex: "none" }} />
-      <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
+      <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 2 }}>
+        <FavStar on={fav} onToggle={onToggleFav} size={14} title={fav ? "Remove from home" : "Pin to home"} />
         <IconButton label="Split right" size="sm" onClick={onSplit}><Icon name="columns-2" size={15} /></IconButton>
         {!single && <IconButton label="Close" size="sm" onClick={onClose}><Icon name="x" size={15} /></IconButton>}
       </div>
@@ -145,6 +146,8 @@ export interface SplitSurfaceProps {
   toolsById: Record<string, Tool>;
   wires: Wire[];
   sizes: number[];
+  favIds: Set<string>;
+  onToggleFav: (tool: Tool) => void;
   onResize: (sizes: number[]) => void;
   onClose: (uid: string) => void;
   onSplit: (uid: string) => void;
@@ -154,7 +157,7 @@ export interface SplitSurfaceProps {
   onToast: (message: string, tone: "info" | "success" | "error") => void;
 }
 
-export function SplitSurface({ panes, toolsById, wires, sizes, onResize, onClose, onSplit, onSend, onOutput, theme, onToast }: SplitSurfaceProps) {
+export function SplitSurface({ panes, toolsById, wires, sizes, favIds, onToggleFav, onResize, onClose, onSplit, onSend, onOutput, theme, onToast }: SplitSurfaceProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [tick, setTick] = useState(0);
   const bump = () => setTick((t) => t + 1);
@@ -281,7 +284,7 @@ export function SplitSurface({ panes, toolsById, wires, sizes, onResize, onClose
             {/* wrapper is NOT clipped, so the nubs can sit in the channel */}
             <div style={{ position: "relative", flex: `${sizes[i]} 1 0`, minWidth: 0, display: "flex" }}>
               <Glass elevation="panel" style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", overflow: "hidden", borderRadius: "var(--radius-lg)" }}>
-                <PaneHeader tool={tool} single={panes.length === 1} onSplit={() => onSplit(pane.uid)} onClose={() => onClose(pane.uid)} />
+                <PaneHeader tool={tool} fav={favIds.has(tool.id)} onToggleFav={() => onToggleFav(tool)} single={panes.length === 1} onSplit={() => onSplit(pane.uid)} onClose={() => onClose(pane.uid)} />
                 {/* While a wire is being dragged OR a divider is being resized,
                     iframes must not capture the pointer — otherwise the cursor
                     crossing a tool swallows the window-level mousemove/mouseup

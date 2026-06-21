@@ -1,8 +1,9 @@
 /* In-repo sub-path sources: gh:owner/repo@ref#subpath.
  *
- * The manifest a real registry ships often lives in a subdirectory (this repo keeps
- * it at public/registry/toolboy.json), so a source carries an optional sub-path that
- * shifts where both the client loader and the discovery crawl look. These tests pin:
+ * The manifest a real registry ships often lives in a subdirectory, so a source carries
+ * an optional sub-path that shifts where both the client loader and the discovery crawl
+ * look. (The fixture below is a real toolboy.json — formerly the bundled demo registry,
+ * kept here now that the app ships no built-in tools.) These tests pin:
  *   1. the loader (resolver.ts) builds manifest + entry URLs under the sub-path;
  *   2. the crawl (discovery.ts) resolves the *same* manifest URL — they must not drift;
  *   3. publishing the demo source indexes exactly the 3 public entities, and opening
@@ -22,7 +23,7 @@ import { resolveManifestUrl, extractCards } from "../backend/src/discovery.ts";
 
 // Resolved from the repo root (cwd under `npm test`); the bundled test runs from a
 // tmp dir, so import.meta.url can't anchor it.
-const MANIFEST_PATH = join(process.cwd(), "public", "registry", "toolboy.json");
+const MANIFEST_PATH = join(process.cwd(), "test", "fixtures", "demo-registry.json");
 const MANIFEST_TEXT = readFileSync(MANIFEST_PATH, "utf8");
 
 const DEMO = "gh:matviibot/toolboy@main#public/registry";

@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 import {
   ArrowRight, Box, Braces, Check, Columns2, Command, Database, Download, GitBranch,
   Globe, Info, Key, KeyRound, ListTree, Lock, Moon, Pipette, Regex, Search, Shield,
-  ShieldCheck, Sparkles, Sun, Workflow, X, type LucideIcon,
+  ShieldCheck, Sparkles, Star, Sun, Workflow, X, type LucideIcon,
 } from "lucide-react";
 
 /**
@@ -36,6 +36,7 @@ const REGISTRY: Record<string, LucideIcon> = {
   shield: Shield,
   "shield-check": ShieldCheck,
   sparkles: Sparkles,
+  star: Star,
   sun: Sun,
   workflow: Workflow,
   x: X,

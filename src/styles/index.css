@@ -22,6 +22,18 @@ body {
   box-sizing: border-box;
 }
 
+/* favourite (pin-to-home) star — brighten + seat on a soft chip on hover. The
+   resting opacity/colour is set inline (FavStar) so the row can reveal it on select. */
+.tb-favstar:hover {
+  background: var(--glass-fill-strong);
+  color: var(--warn) !important;
+  opacity: 1 !important;
+  transform: scale(1.06);
+}
+.tb-favstar:active {
+  transform: scale(0.92);
+}
+
 ::-webkit-scrollbar {
   width: 9px;
   height: 9px;
