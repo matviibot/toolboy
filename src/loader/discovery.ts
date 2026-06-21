@@ -11,6 +11,13 @@
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL?.replace(/\/$/, "");
 
+/** Optional publish token. The backend gates /publish on a bearer token when its
+    PUBLISH_TOKEN is set; this lets the client send it. NOTE: a VITE_* var is inlined
+    into the shipped bundle, so a token baked in here is readable by anyone who loads
+    the app — fine for a private/self-hosted build, but for a public deployment prefer
+    operator-driven publishing (curl/CI with the token) over shipping it to clients. */
+const PUBLISH_TOKEN = import.meta.env.VITE_PUBLISH_TOKEN;
+
 /** True when a backend is configured — gates the palette's discovery affordance. */
 export const discoveryEnabled = !!BACKEND_URL;
 
@@ -45,9 +52,11 @@ export async function discover(query: string, signal?: AbortSignal): Promise<Dis
 /** Ask the index to (re)crawl a repo's toolboy.json and index its public entities. */
 export async function publish(source: string): Promise<{ repo: string; pin: string; indexed: number }> {
   if (!BACKEND_URL) throw new Error("no backend configured (set VITE_BACKEND_URL)");
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (PUBLISH_TOKEN) headers.authorization = `Bearer ${PUBLISH_TOKEN}`;
   const res = await fetch(`${BACKEND_URL}/publish`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers,
     body: JSON.stringify({ source }),
   });
   const data = (await res.json().catch(() => null)) as

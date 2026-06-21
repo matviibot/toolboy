@@ -9,13 +9,14 @@
 
    Populate model: crawl-on-publish. POST /publish { source } pulls that repo's
    toolboy.json on demand, extracts its public cards, and replaces the rows for
-   that source. No background crawler, no auth — fine for a personal/self-hosted
-   index; a shared deployment would add a publish token.
+   that source. No background crawler. Publish is open by default (fine for a
+   personal/self-hosted index); set PUBLISH_TOKEN to require a bearer token on a
+   shared deployment (checkPublishAuth below).
 
    Only `public` entities are indexed: a private tool's metadata never leaves the
    user's own registry. */
 
-import { json } from "./http";
+import { bearerToken, json, timingSafeEqual } from "./http";
 import type { Env } from "./env";
 
 export interface DiscoveryCard {
@@ -92,7 +93,28 @@ export function extractCards(raw: unknown, source: string, pin: string): { repoN
   return { repoName, cards };
 }
 
+/** Gate POST /publish. When PUBLISH_TOKEN is configured the request must carry a
+    matching `Authorization: Bearer <token>` (constant-time compared); when it's
+    unset, publish stays open — fine for a personal/self-hosted index, and it keeps
+    `npm run dev` frictionless. Returns a 401 Response to short-circuit, or null to
+    proceed. */
+export function checkPublishAuth(req: Request, env: Env, cors: Record<string, string>): Response | null {
+  const expected = env.PUBLISH_TOKEN;
+  if (!expected) return null; // open mode
+  const got = bearerToken(req);
+  if (!got || !timingSafeEqual(got, expected)) {
+    return json({ error: "publish requires a valid bearer token" }, 401, {
+      ...cors,
+      "WWW-Authenticate": "Bearer",
+    });
+  }
+  return null;
+}
+
 export async function handlePublish(req: Request, env: Env, cors: Record<string, string>): Promise<Response> {
+  const denied = checkPublishAuth(req, env, cors);
+  if (denied) return denied;
+
   let body: { source?: string };
   try {
     body = (await req.json()) as { source?: string };

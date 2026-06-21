@@ -8,6 +8,16 @@ compatibility_date = "2026-06-01"
 # "*" is safe only because the backend uses no cookies/credentials.
 ALLOWED_ORIGINS = "*"
 
+# Per-IP request caps (fixed window, 60s). Defaults live in src/index.ts
+# (relay 60/min, publish 10/min); uncomment to override. Only enforced when the
+# RATE_LIMIT KV namespace below is bound — otherwise limiting is skipped.
+# RELAY_RATE_LIMIT = "60"
+# PUBLISH_RATE_LIMIT = "10"
+
+# Gate POST /publish behind a bearer token. Do NOT put it here as plaintext — set it
+# as an encrypted secret:  wrangler secret put PUBLISH_TOKEN
+# Unset → publish is open (fine for a personal/self-hosted index).
+
 # Discovery index. Local dev (wrangler dev / --local) uses a local SQLite keyed by
 # `database_name` and ignores `database_id` — so the placeholder is fine for local.
 # For a remote deploy: run `wrangler d1 create toolboy-index` and paste the real id.
@@ -16,9 +26,11 @@ binding = "DB"
 database_name = "toolboy-index"
 database_id = "local"   # placeholder; replace with the real id from `wrangler d1 create`
 
-# Future hardening (security.md lists rate-limiting for the relay): bind a KV
-# namespace and add a fixed-window limiter keyed by cf.ip in src/relay.ts. The
-# README also notes KV as the cache layer for /discover.
+# Per-IP rate limiting for /relay and /publish (src/ratelimit.ts). Bind a KV
+# namespace to turn it on; leave it unbound for local dev (limiting is skipped).
+#   wrangler kv namespace create RATE_LIMIT        # paste the printed id below
+#   wrangler kv namespace create RATE_LIMIT --preview   # for `wrangler dev --remote`
 # [[kv_namespaces]]
 # binding = "RATE_LIMIT"
-# id = "<created via: wrangler kv namespace create RATE_LIMIT>"
+# id = "<id from `wrangler kv namespace create RATE_LIMIT`>"
+# preview_id = "<id from the --preview create>"

@@ -41,6 +41,9 @@ CORS-friendly APIs never touch the relay — direct fetch wins and is preferred
   the field) on top of the SSRF block.
 - **No redirects.** A 30x is reported, never followed — auto-following could leak
   the injected secret header to an off-allowlist host.
+- **Rate limited.** When a `RATE_LIMIT` KV namespace is bound, each IP gets a
+  fixed-window cap (default 60 relay req/min); over it returns `429` with
+  `Retry-After`. Unbound → limiting is skipped (local dev). ([`src/ratelimit.ts`](src/ratelimit.ts))
 
 ### Residual risks (named, not hidden)
 
@@ -51,8 +54,9 @@ CORS-friendly APIs never touch the relay — direct fetch wins and is preferred
   public hostname that resolves to a private IP at fetch time. Workers egress to the
   public internet (they can't route to a user's LAN), which blunts impact; a
   hardened deploy should resolve-then-pin the IP.
-- **No rate limit yet.** `wrangler.toml` has a commented KV binding and `src/index.ts`
-  marks where a fixed-window limiter goes.
+- **Rate limit is best-effort.** The fixed-window counter lives in KV, which is
+  eventually consistent with no atomic increment — concurrent requests can slip past
+  the edge of the limit. It caps abusive *volume*, it doesn't meter exactly.
 
 ### Wire format
 
@@ -66,6 +70,8 @@ POST <relay>/
 200  { "relayed": true,  "response": { "ok", "status", "statusText", "headers", "body" } }
 // relay refused (bad url, SSRF, off-allowlist, too large):
 4xx  { "relayed": false, "error": "…" }
+// rate limited (RATE_LIMIT KV bound + over the per-IP cap), with Retry-After:
+429  { "relayed": false, "error": "rate limited; retry in <n>s" }
 ```
 
 ## The discovery index
@@ -78,14 +84,18 @@ trust gate), so the index is a finder, never a trust shortcut.
 
 - **Populate model: crawl-on-publish.** `POST /publish { source }` pulls that repo's
   `toolboy.json` on demand, extracts its public cards, and *replaces* the rows for that
-  source (so an un-published entity disappears). No background crawler, no auth — fine
-  for a personal/self-hosted index; a shared deployment would add a publish token.
+  source (so an un-published entity disappears). No background crawler.
+- **Publish auth (optional).** Open by default — fine for a personal/self-hosted
+  index. Set `PUBLISH_TOKEN` (`wrangler secret put PUBLISH_TOKEN`) to require
+  `Authorization: Bearer <token>` on `/publish`; the token is compared in constant
+  time and a miss returns `401`.
 - **Private entities are never indexed** — a private tool's metadata stays in the
   user's own registry.
 
 ```jsonc
-POST /publish  { "source": "gh:owner/repo@ref" }
+POST /publish  { "source": "gh:owner/repo@ref" }      // + Authorization: Bearer <token> if PUBLISH_TOKEN set
 200            { "source", "repo", "pin", "indexed": <n> }
+401            { "error": "publish requires a valid bearer token" }   // PUBLISH_TOKEN set, token missing/wrong
 
 GET  /discover?q=<text>&tag=<tag>&limit=<n>
 200            { "entities": [ { id, source, kind, name, description, icon, tags, repoName, pin } ] }
@@ -107,6 +117,17 @@ For a remote deploy (needs a Cloudflare account):
 wrangler d1 create toolboy-index   # paste the printed database_id into wrangler.toml
 npm run db:remote                  # apply schema.sql to the remote D1
 npm run deploy                     # wrangler deploy → *.workers.dev URL
+```
+
+Optional hardening for a shared deployment:
+
+```sh
+# Rate limiting: create a KV namespace and uncomment the [[kv_namespaces]] block
+# in wrangler.toml with the printed id(s).
+wrangler kv namespace create RATE_LIMIT
+
+# Publish auth: require a bearer token on /publish (stored encrypted, not in wrangler.toml).
+wrangler secret put PUBLISH_TOKEN
 ```
 
 > **Toolchain note.** wrangler 4.87+ require **Node ≥22**; the repo pins Node 22 via

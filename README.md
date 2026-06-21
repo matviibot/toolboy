@@ -83,6 +83,19 @@ npm run build      # typecheck + production build
 > in an opaque-origin sandboxed iframe with `connect-src 'none'`, reaching the world
 > only through `ctx`. The bundled tools are real tools authored against that contract.
 
+## Authoring tools
+
+Tools live in their own git repo with a `toolboy.json` manifest. To start one, copy
+[`templates/tool-starter`](templates/tool-starter) — a minimal registry with one tool
+and an SRI-hashing helper — and point toolboy at the repo. Author against
+[`@toolboy/sdk`](packages/sdk) for a typed `ctx` and a React helper (bundle to a single
+classic script), or write a framework-free tool directly. See
+[docs/sdk.md](docs/sdk.md) and [docs/manifest.md](docs/manifest.md).
+
+> **Note:** `@toolboy/sdk` is scaffolded and publish-ready but **not yet published to
+> npm** — `npm publish` needs the `@toolboy` org + credentials. Until then, depend on
+> it via a local path, git, or tarball reference.
+
 ## Status
 
 Manifest loader + runtime boundary + background revalidation implemented. Entities
@@ -92,5 +105,10 @@ cache → render); tools run in sandboxed iframes behind the host-mediated `ctx`
 is the boot source; the `gh:` resolver pins to a commit. While online and visible, the
 loader polls the source's mutable pointer in the background and surfaces a passive
 "updates available" affordance — applied only on accept, never silently
-(stale-while-revalidate; see [docs/loading.md](docs/loading.md)). Next: the
-registry/discovery backend and the `net` relay fallback. See [docs/](docs/).
+(stale-while-revalidate; see [docs/loading.md](docs/loading.md)).
+
+The [backend](backend/) is implemented: a stateless `net` relay (CORS fallback,
+SSRF-guarded, per-IP rate-limited) and a discovery index (`/publish` crawl, gated by
+an optional `PUBLISH_TOKEN`; `/discover` query). The [`@toolboy/sdk`](packages/sdk)
+package and a [tool starter template](templates/tool-starter) are scaffolded for tool
+authors. See [docs/](docs/).
