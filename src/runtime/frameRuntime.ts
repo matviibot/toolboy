@@ -32,6 +32,16 @@ export const FRAME_RUNTIME_SRC = String.raw`
     tool: function (fn) { pendingMount = fn; mountIfReady(); }
   };
 
+  // A focused frame swallows keydown, so the host's window-level shortcuts stop
+  // firing once a tool has focus. Catch the host-owned ones here and forward them
+  // back over the port — the host runs the actual action (opening the palette).
+  window.addEventListener("keydown", function (e) {
+    if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      if (port) port.postMessage({ k: "hotkey", combo: "cmd-k" });
+    }
+  });
+
   function rpc(ns, fn, args) {
     return new Promise(function (resolve, reject) {
       var id = ++rpcSeq;

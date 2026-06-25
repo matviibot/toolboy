@@ -206,6 +206,11 @@ export default function App() {
   const [panes, setPanes] = useState<Pane[]>([]);
   const [sizes, setSizes] = useState<number[]>([]);
   const [wires, setWires] = useState<Wire[]>([]);
+  // pane whose tool frame should grab keyboard focus — set on open so the user
+  // can type into a freshly-summoned tool without clicking it first. (A future
+  // setting could gate this: always focus the opened tool, or never — keeping
+  // focus where it was.)
+  const [focusUid, setFocusUid] = useState<string | null>(null);
   const [palette, setPalette] = useState<PaletteState>(false);
   const [trust, setTrust] = useState<TrustState | null>(null);
   const [update, setUpdate] = useState<RegistryUpdate | null>(null);
@@ -310,23 +315,34 @@ export default function App() {
     setUpdate(null);
   }, [update]);
 
+  // ⌘K toggles the palette. A focused tool frame swallows this keydown, so the
+  // frame runtime forwards it back over the bridge as a "cmd-k" hotkey — both
+  // paths land here so the shortcut works whether the host or a tool has focus.
+  const togglePalette = useCallback(() => setPalette((p) => (p ? false : "open")), []);
+  const onToolHotkey = useCallback((combo: string) => {
+    if (combo === "cmd-k") togglePalette();
+  }, [togglePalette]);
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        setPalette((p) => (p ? false : "open"));
+        togglePalette();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [togglePalette]);
 
   const openSingle = useCallback((toolId: string) => {
-    setPanes([mkPane(toolId)]); setSizes([100]); setWires([]);
+    const p = mkPane(toolId);
+    setPanes([p]); setSizes([100]); setWires([]); setFocusUid(p.uid);
   }, []);
 
   const addPane = useCallback((toolId: string) => {
-    setPanes((ps) => { const next = [...ps, mkPane(toolId)]; setSizes(equalize(next.length)); return next; });
+    const p = mkPane(toolId);
+    setPanes((ps) => { const next = [...ps, p]; setSizes(equalize(next.length)); return next; });
+    setFocusUid(p.uid);
   }, []);
 
   const openToolchain = useCallback((chain: Extract<Entity, { kind: "toolchain" }>) => {
@@ -335,6 +351,7 @@ export default function App() {
     chain.tools.forEach((t, i) => { uidByInstance[t.instance] = ps[i].uid; });
     const ws: Wire[] = chain.wires.map((w) => ({ from: uidByInstance[w.from], fromPort: w.fromPort, to: uidByInstance[w.to], toPort: w.toPort }));
     setPanes(ps); setSizes(equalize(ps.length)); setWires(ws);
+    if (ps.length) setFocusUid(ps[0].uid); // focus the head of the scene
   }, []);
 
   // shared open path: trust-gate an entity against a registry, then open/split it.
@@ -482,6 +499,7 @@ export default function App() {
             toolsById={registry.toolsById}
             wires={wires}
             sizes={sizes}
+            focusUid={focusUid}
             favIds={favIds}
             onToggleFav={toggleFav}
             onResize={setSizes}
@@ -491,6 +509,7 @@ export default function App() {
             onOutput={onOutput}
             theme={theme}
             onToast={pushToast}
+            onHotkey={onToolHotkey}
           />
         </div>
       )}

@@ -93,7 +93,15 @@ export interface ToastMessage {
   tone: "info" | "success" | "error";
 }
 
-export type FrameToHost = ReadyMessage | RpcCall | EmitMessage | ToastMessage;
+/** A host-level shortcut the tool frame caught while focused and is handing back
+    up (e.g. ⌘K). A focused iframe swallows keydown, so window-level host hotkeys
+    only keep working if the frame forwards them — the host owns the action. */
+export interface HotkeyMessage {
+  k: "hotkey";
+  combo: string;
+}
+
+export type FrameToHost = ReadyMessage | RpcCall | EmitMessage | ToastMessage | HotkeyMessage;
 
 /** Type of the `init-port` envelope the frame listens for on `window`. */
 export const INIT_KIND = "init-port" as const;
