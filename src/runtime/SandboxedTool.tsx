@@ -35,25 +35,35 @@ export interface SandboxedToolProps {
   /** latest value per input port id */
   inputs: Record<string, unknown>;
   theme: "dark" | "light";
+  /** take keyboard focus once the frame has loaded (the just-opened tool) */
+  focus?: boolean;
   onOutput: (port: string, value: unknown) => void;
   onToast: (message: string, tone: "info" | "success" | "error") => void;
+  /** host-level shortcut the focused frame forwarded back up (e.g. ⌘K) */
+  onHotkey?: (combo: string) => void;
 }
 
-export function SandboxedTool({ tool, inputs, theme, onOutput, onToast }: SandboxedToolProps) {
+export function SandboxedTool({ tool, inputs, theme, focus, onOutput, onToast, onHotkey }: SandboxedToolProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const bridgeRef = useRef<ToolBridge | null>(null);
   // last value sent per port, so we only forward genuine changes (not re-renders)
   const sentRef = useRef<Record<string, unknown>>({});
+  // whether the frame document has finished loading (focus is only meaningful then)
+  const loadedRef = useRef(false);
+  const focusRef = useRef(focus);
+  focusRef.current = focus;
 
   const srcDoc = useMemo(() => buildSrcdoc(tool.source || "/* missing tool source */"), [tool.source]);
 
   // latest callbacks/inputs without re-running the bridge-setup effect
   const onOutputRef = useRef(onOutput);
   const onToastRef = useRef(onToast);
+  const onHotkeyRef = useRef(onHotkey);
   const inputsRef = useRef(inputs);
   const themeRef = useRef(theme);
   onOutputRef.current = onOutput;
   onToastRef.current = onToast;
+  onHotkeyRef.current = onHotkey;
   inputsRef.current = inputs;
   themeRef.current = theme;
 
@@ -73,6 +83,7 @@ export function SandboxedTool({ tool, inputs, theme, onOutput, onToast }: Sandbo
         theme: themePayload,
         onOutput: (port, v) => onOutputRef.current(port, v),
         onToast: (m, t) => onToastRef.current(m, t),
+        onHotkey: (combo) => onHotkeyRef.current?.(combo),
       });
       bridgeRef.current = bridge;
       // flush whatever inputs the pane already holds (e.g. seeded by a wire)
@@ -80,11 +91,16 @@ export function SandboxedTool({ tool, inputs, theme, onOutput, onToast }: Sandbo
         bridge.sendInput(port, value);
         sentRef.current[port] = value;
       }
+      // hand keyboard focus to the freshly-opened tool so the user can type
+      // straight away (otherwise focus falls to <body> when the palette closes)
+      loadedRef.current = true;
+      if (focusRef.current) iframe!.focus();
     }
 
     iframe.addEventListener("load", attach);
     return () => {
       iframe.removeEventListener("load", attach);
+      loadedRef.current = false;
       bridgeRef.current?.dispose();
       bridgeRef.current = null;
     };
@@ -107,6 +123,12 @@ export function SandboxedTool({ tool, inputs, theme, onOutput, onToast }: Sandbo
   useEffect(() => {
     bridgeRef.current?.sendTheme(readThemeVars());
   }, [theme]);
+
+  // if this pane becomes the focus target while already loaded (the frame won't
+  // remount, so `attach` won't run again), pull focus here instead
+  useEffect(() => {
+    if (focus && loadedRef.current) iframeRef.current?.focus();
+  }, [focus]);
 
   return (
     <iframe

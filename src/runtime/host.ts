@@ -32,6 +32,8 @@ export interface BridgeConfig {
   /** the tool emitted on one of its output ports */
   onOutput: (port: string, value: unknown) => void;
   onToast: (message: string, tone: "info" | "success" | "error") => void;
+  /** a host-level shortcut the focused frame forwarded back up (e.g. ⌘K) */
+  onHotkey?: (combo: string) => void;
 }
 
 export class ToolBridge {
@@ -91,6 +93,9 @@ export class ToolBridge {
         break;
       case "toast":
         this.cfg.onToast(m.message, m.tone);
+        break;
+      case "hotkey":
+        this.cfg.onHotkey?.(m.combo);
         break;
       case "rpc":
         this.handleRpc(m.id, m.ns, m.fn, m.args);

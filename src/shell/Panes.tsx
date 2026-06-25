@@ -146,6 +146,8 @@ export interface SplitSurfaceProps {
   toolsById: Record<string, Tool>;
   wires: Wire[];
   sizes: number[];
+  /** pane uid whose tool frame should take keyboard focus when it mounts */
+  focusUid: string | null;
   favIds: Set<string>;
   onToggleFav: (tool: Tool) => void;
   onResize: (sizes: number[]) => void;
@@ -155,9 +157,11 @@ export interface SplitSurfaceProps {
   onOutput: (uid: string, port: string, value: unknown) => void;
   theme: "dark" | "light";
   onToast: (message: string, tone: "info" | "success" | "error") => void;
+  /** a focused tool frame forwarded a host shortcut back up (e.g. ⌘K) */
+  onHotkey: (combo: string) => void;
 }
 
-export function SplitSurface({ panes, toolsById, wires, sizes, favIds, onToggleFav, onResize, onClose, onSplit, onSend, onOutput, theme, onToast }: SplitSurfaceProps) {
+export function SplitSurface({ panes, toolsById, wires, sizes, focusUid, favIds, onToggleFav, onResize, onClose, onSplit, onSend, onOutput, theme, onToast, onHotkey }: SplitSurfaceProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [tick, setTick] = useState(0);
   const bump = () => setTick((t) => t + 1);
@@ -290,7 +294,7 @@ export function SplitSurface({ panes, toolsById, wires, sizes, favIds, onToggleF
                     crossing a tool swallows the window-level mousemove/mouseup
                     and the drag freezes. */}
                 <div style={{ flex: 1, minHeight: 0, overflow: "hidden", pointerEvents: link || resizing ? "none" : undefined }}>
-                  <SandboxedTool tool={tool} inputs={pane.inputs} theme={theme} onOutput={(port, v) => onOutput(pane.uid, port, v)} onToast={onToast} />
+                  <SandboxedTool tool={tool} inputs={pane.inputs} theme={theme} focus={pane.uid === focusUid} onOutput={(port, v) => onOutput(pane.uid, port, v)} onToast={onToast} onHotkey={onHotkey} />
                 </div>
               </Glass>
 
