@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # toolboy — bring up everything locally: the backend relay (Wrangler, :8787)
-# and the web shell (Vite, :5173). Ctrl+C tears both down.
+# and the web shell (Vite, :5180). Ctrl+C tears both down.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -24,7 +24,7 @@ trap cleanup EXIT INT TERM
 log "starting backend relay → http://localhost:8787"
 (cd backend && npm run --silent dev) & pids+=($!)
 
-log "starting web shell    → http://localhost:5173"
+log "starting web shell    → http://localhost:5180"
 npm run --silent dev & pids+=($!)
 
 wait
