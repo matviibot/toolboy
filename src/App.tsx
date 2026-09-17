@@ -14,6 +14,10 @@ import { Palette } from "./shell/Palette";
 import { SplitSurface } from "./shell/Panes";
 import { TrustDialog, type TrustSubject } from "./shell/Trust";
 import { loadFavourites, saveFavourites, toggleFavourite, type Favourite } from "./shell/favourites";
+import { VaultMenu } from "./shell/VaultMenu";
+import { startMirror } from "./shell/vault";
+import { migrateLegacyKeys } from "./runtime/idb";
+import { repoIdentity } from "./loader/resolver";
 import type { DiscoveryCard } from "./loader/discovery";
 
 let UID = 1;
@@ -224,6 +228,9 @@ export default function App() {
 
   useEffect(() => { document.documentElement.setAttribute("data-theme", theme); }, [theme]);
 
+  // mirror every change into the connected folder (no-op until one is picked)
+  useEffect(() => startMirror(), []);
+
   // derived read-models over the loaded repos
   const registry = useMemo(() => mergeAll(regs), [regs]);
   const entityById = useMemo(() => new Map(registry.all.map((e) => [e.id, e])), [registry]);
@@ -234,6 +241,22 @@ export default function App() {
     return m;
   }, [regs]);
   const favIds = useMemo(() => new Set(favourites.map((f) => f.id)), [favourites]);
+
+  // Per-tool storage used to be keyed by bare entity id, which collides across repos.
+  // Entries written before that fix are moved under [repo, toolId, key] as soon as the
+  // repo that owns them loads — a tool whose repo isn't loaded keeps its old key and
+  // waits, rather than being guessed at or dropped.
+  useEffect(() => {
+    const byTool: Record<string, string> = {};
+    for (const [src, r] of Object.entries(regs)) {
+      const repo = repoIdentity(src);
+      for (const e of r.all) if (e.kind === "tool") byTool[e.id] = repo;
+    }
+    if (Object.keys(byTool).length === 0) return;
+    migrateLegacyKeys(byTool)
+      .then((n) => { if (n) console.info(`[toolboy] moved ${n} storage entr${n === 1 ? "y" : "ies"} into their repo namespace`); })
+      .catch((err) => console.warn("[toolboy] storage migration failed:", err instanceof Error ? err.message : err));
+  }, [regs]);
 
   // boot: there's no default registry — reload the repos behind the user's favourites
   // (the home screen) so their tiles resolve. Each source is independent; one failing
@@ -480,6 +503,7 @@ export default function App() {
       {booted && (
         <div style={{ position: "absolute", top: 16, right: 18, display: "flex", alignItems: "center", gap: 10, zIndex: "var(--z-header)" } as CSSProperties}>
           {update && <UpdateBanner update={update} onApply={applyUpdate} onDismiss={dismissUpdate} />}
+          <VaultMenu onToast={pushToast} />
           <IconButton label="Open command palette" onClick={() => setPalette("open")}><Icon name="command" size={17} /></IconButton>
           <IconButton label="Toggle theme" onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}>
             <Icon name={theme === "dark" ? "sun" : "moon"} size={17} />

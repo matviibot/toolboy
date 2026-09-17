@@ -51,6 +51,18 @@ export function parseSource(spec: string, fallbackBase = "/registry"): Source {
   throw new Error(`unrecognized source: ${spec}`);
 }
 
+/** A source's **identity**, independent of the ref it happens to be pinned to.
+
+    Per-tool storage is keyed by this, not by the source spec: `gh:o/r@main` and
+    `gh:o/r@a1b2c3` are the same repo, and keying on the spec would silently orphan
+    every tool's saved data the moment it moved to a new ref or commit. A sub-path is
+    part of the identity (two manifests in one repo are two toolboxes); the ref is not. */
+export function repoIdentity(spec: string): string {
+  const src = parseSource(spec);
+  if (src.kind !== "github") return "self";
+  return `gh:${src.owner}/${src.repo}` + (src.sub ? `#${src.sub}` : "");
+}
+
 /** Strip surrounding slashes from a sub-path; an empty path (e.g. bare `@ref#`) is
     treated as no sub-path so it collapses back to the repo-root behavior. */
 export function normalizeSub(sub: string | undefined): string | undefined {

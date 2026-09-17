@@ -10,7 +10,19 @@ export function openDb(name: string, version: number, stores: string[]): Promise
       const db = req.result;
       for (const s of stores) if (!db.objectStoreNames.contains(s)) db.createObjectStore(s);
     };
-    req.onsuccess = () => resolve(req.result);
+    // Another tab still holds an older version open, so this upgrade can't start.
+    // Without this the promise never settles and every storage call silently hangs
+    // forever — the tab looks fine and simply stops remembering anything. Fail loudly
+    // instead; the `onversionchange` below is what normally prevents it.
+    req.onblocked = () =>
+      reject(new Error(`indexedDB upgrade to v${version} blocked by another open tab: ${name}`));
+    req.onsuccess = () => {
+      const db = req.result;
+      // A newer tab wants to upgrade: let go so it can. Holding the connection open
+      // would deadlock the other tab; the reload it does next reopens ours cleanly.
+      db.onversionchange = () => db.close();
+      resolve(db);
+    };
     req.onerror = () => reject(req.error ?? new Error(`indexedDB open failed: ${name}`));
   });
 }

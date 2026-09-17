@@ -15,7 +15,7 @@
 import type { Entity, Tool, Toolchain } from "../shell/types";
 import { cache } from "./cache";
 import { parseManifest, type Manifest, type ToolEntity, type ToolchainEntity } from "./manifest";
-import { parseSource, resolveSource, type Resolved, type Source } from "./resolver";
+import { parseSource, repoIdentity, resolveSource, type Resolved, type Source } from "./resolver";
 import { computeSri, verifySri } from "./sri";
 
 export interface LoadedRegistry {
@@ -81,7 +81,7 @@ async function loadBundle(resolved: Resolved, tool: ToolEntity): Promise<string>
   return text;
 }
 
-function toShellTool(e: ToolEntity, source: string): Tool {
+function toShellTool(e: ToolEntity, source: string, repo: string): Tool {
   return {
     id: e.id,
     kind: "tool",
@@ -92,6 +92,7 @@ function toShellTool(e: ToolEntity, source: string): Tool {
     ports: e.ports,
     perms: e.permissions,
     source,
+    repo,
   };
 }
 
@@ -138,7 +139,7 @@ async function buildRegistry(
   const loaded = await Promise.all(
     toolDefs.map(async (e) => {
       try {
-        return toShellTool(e, await loadBundle(resolved, e));
+        return toShellTool(e, await loadBundle(resolved, e), repoIdentity(sourceSpec));
       } catch (err) {
         onIssue?.({ id: e.id, reason: err instanceof Error ? err.message : String(err) });
         return null;

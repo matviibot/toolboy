@@ -78,6 +78,7 @@ export function SandboxedTool({ tool, inputs, theme, focus, onOutput, onToast, o
       const themePayload: ThemePayload = { name: themeRef.current, vars: readThemeVars() };
       const bridge = new ToolBridge(iframe!, {
         toolId: tool.id,
+        repo: tool.repo,
         visibility: tool.origin === "public" ? "public" : "private",
         perms: tool.perms,
         theme: themePayload,

@@ -29,6 +29,10 @@ export interface Tool {
   perms: Perms;
   /** the verified tool bundle text, fetched by the loader and run in the sandbox */
   source: string;
+  /** identity of the repo this came from (`gh:owner/repo`, ref-independent). Entity
+      ids are only unique *within* a repo, so this is what makes a tool's storage
+      namespace unambiguous — see runtime/idb.ts. */
+  repo: string;
 }
 
 /** a tool slot in a scene; `instance` is the local handle (the same tool id can
