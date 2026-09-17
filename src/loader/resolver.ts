@@ -33,7 +33,7 @@ export interface Resolved {
 /** GitHub PAT used to read PRIVATE repos, from VITE_GITHUB_TOKEN (build-time, inlined
     into the bundle — see .env.example for the caveat). Read defensively: it's undefined
     in non-Vite contexts (Node tests, the backend), where loading stays anonymous. */
-function githubToken(): string | undefined {
+export function githubToken(): string | undefined {
   const env = (import.meta as { env?: Record<string, string | undefined> }).env;
   return env?.VITE_GITHUB_TOKEN || undefined;
 }
@@ -49,6 +49,23 @@ export function parseSource(spec: string, fallbackBase = "/registry"): Source {
   const git = /^git\+https?:\/\/.+#(.+)$/.exec(spec);
   if (git) throw new Error(`generic git sources not yet supported: ${spec}`);
   throw new Error(`unrecognized source: ${spec}`);
+}
+
+/** The lenient, human-facing counterpart to `parseSource`.
+
+    `parseSource` is strict because it reads machine input (a manifest, a stored
+    favourite). This reads what a person types into a box: `owner/repo`, with or without
+    `@ref`, with or without the `gh:` prefix, or the github.com URL they actually have on
+    their clipboard. Returns a canonical spec, or null when it isn't a repo reference at
+    all — which is a different answer from "that repo doesn't exist", and the UI says so
+    differently. */
+export function normalizeUserSource(raw: string, defaultRef = "main"): string | null {
+  let v = raw.trim().replace(/^gh:/, "");
+  if (!v) return null;
+  const url = /^https?:\/\/github\.com\/([^/]+)\/([^/#?]+)/.exec(v);
+  if (url) v = `${url[1]}/${url[2].replace(/\.git$/, "")}`;
+  if (!/^[^/\s]+\/[^/\s@#]+(@[^#\s]+)?(#\S+)?$/.test(v)) return null;
+  return "gh:" + (v.includes("@") ? v : v.replace(/(#|$)/, `@${defaultRef}$1`));
 }
 
 /** A source's **identity**, independent of the ref it happens to be pinned to.
@@ -69,6 +86,18 @@ export function normalizeSub(sub: string | undefined): string | undefined {
   if (!sub) return undefined;
   const trimmed = sub.replace(/^\/+/, "").replace(/\/+$/, "");
   return trimmed || undefined;
+}
+
+/** A source that couldn't be resolved, carrying the HTTP status so callers can tell
+    "no such repo" from "rate limited" from "your token is bad". Worth knowing because
+    GitHub answers **404, not 403**, for a private repo you can't see — so a 404 with no
+    token configured means "not found, or private and we're not authenticated", and the
+    same 404 with a token means the repo or ref genuinely isn't there. */
+export class SourceError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message);
+    this.name = "SourceError";
+  }
 }
 
 /** Resolve a Source to URLs + the immutable pin it reads from. `opts.token` overrides
@@ -102,7 +131,12 @@ export async function resolveSource(
     headers: { Accept: "application/vnd.github.sha", ...auth },
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`could not resolve ${src.owner}/${src.repo}@${src.ref}: ${res.status}`);
+  if (!res.ok) {
+    throw new SourceError(
+      `could not resolve ${src.owner}/${src.repo}@${src.ref}: ${res.status}`,
+      res.status,
+    );
+  }
   const commit = (await res.text()).trim();
 
   // The sub-path (if any) shifts the base into a repo subdirectory; manifestUrl and

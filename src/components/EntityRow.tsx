@@ -16,7 +16,8 @@ export interface EntityRowProps extends Omit<HTMLAttributes<HTMLDivElement>, "ti
   origin?: Origin;
   /** toolchain: number of tools in the scene */
   toolCount?: number;
-  /** optional right-aligned mono meta (e.g. "⌘↵ split"), shown only when selected */
+  /** optional right-aligned mono meta — identifying detail (e.g. the repo a discovered
+      tool came from), not a keyboard hint. Keyboard hints live in the palette footer. */
   meta?: string;
   /** optional trailing control (e.g. a favourite star), always rendered */
   trailing?: ReactNode;
@@ -105,11 +106,11 @@ export function EntityRow({
         )}
       </div>
 
-      {/* right rail: origin badge over the (selection-only) hotkey hint — stacked, not
-          crammed into the name row, so the name keeps full width. */}
+      {/* right rail: origin badge over its meta — stacked, not crammed into the name
+          row, so the name keeps full width. */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center", gap: "4px", flex: "none" }}>
         <OriginBadge origin={origin} />
-        {meta && selected && <span style={{ font: "var(--type-mono-sm)", color: "var(--fg-3)", whiteSpace: "nowrap" }}>{meta}</span>}
+        {meta && <span style={{ font: "var(--type-mono-sm)", color: "var(--fg-3)", whiteSpace: "nowrap" }}>{meta}</span>}
       </div>
       {trailing}
     </div>

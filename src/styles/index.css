@@ -72,6 +72,10 @@ body {
   0%, 100% { opacity: 0.55; transform: scale(1); }
   50% { opacity: 1; transform: scale(1.04); }
 }
+/* the only spinner in the shell — a repo check is the one wait the user must sit through */
+@keyframes tbSpin {
+  to { transform: rotate(360deg); }
+}
 @keyframes tbPaletteIn {
   from { opacity: 0; transform: translateY(-8px) scale(0.985); }
   to { opacity: 1; transform: none; }

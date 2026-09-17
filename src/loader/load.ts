@@ -15,7 +15,7 @@
 import type { Entity, Tool, Toolchain } from "../shell/types";
 import { cache } from "./cache";
 import { parseManifest, type Manifest, type ToolEntity, type ToolchainEntity } from "./manifest";
-import { parseSource, repoIdentity, resolveSource, type Resolved, type Source } from "./resolver";
+import { githubToken, parseSource, repoIdentity, resolveSource, SourceError, type Resolved, type Source } from "./resolver";
 import { computeSri, verifySri } from "./sri";
 
 export interface LoadedRegistry {
@@ -168,6 +168,79 @@ async function buildRegistry(
   );
 
   return { source: sourceSpec, repoName: manifest.repo.name, pin, all, toolsById };
+}
+
+/** The answer to "can I actually add this repo?", before the user commits to it.
+
+    Two questions, and they fail differently: does the ref resolve (does the repo exist,
+    can we see it), and is there a valid `toolboy.json` under it (is it a toolbox at all).
+    A repo that exists but isn't a toolbox is the more common mistake, and "not found"
+    would be a lie about it — so each gets its own message.
+
+    Deliberately not cached: `loadRegistry` falls back to a cached manifest when the
+    network is unavailable, which is right for opening a tool you already have and wrong
+    for checking whether something is reachable right now. */
+export type SourceProbe =
+  | { ok: true; spec: string; repoName: string; pin: string; tools: number; toolchains: number }
+  | { ok: false; reason: string };
+
+export async function probeSource(spec: string): Promise<SourceProbe> {
+  let src: Source;
+  try {
+    src = parseSource(spec);
+  } catch {
+    return { ok: false, reason: "Expected owner/repo, optionally with @ref" };
+  }
+
+  let resolved: Resolved;
+  try {
+    resolved = await resolveSource(src);
+  } catch (err) {
+    const status = err instanceof SourceError ? err.status : undefined;
+    // GitHub answers 404 for a private repo you aren't authenticated for, so the honest
+    // message depends on whether we even have a token to have been refused with.
+    if (status === 404) {
+      return {
+        ok: false,
+        reason: githubToken()
+          ? "No such repo or ref — or the token can't see it"
+          : "Not found. If it's private, a VITE_GITHUB_TOKEN is needed",
+      };
+    }
+    if (status === 401) return { ok: false, reason: "GitHub rejected the configured token" };
+    if (status === 403) {
+      return {
+        ok: false,
+        reason: githubToken() ? "GitHub rate-limited this check" : "Rate-limited — a token raises the limit",
+      };
+    }
+    return { ok: false, reason: navigator.onLine ? "Couldn't reach GitHub" : "You're offline" };
+  }
+
+  try {
+    const res = await fetch(resolved.manifestUrl, { cache: "no-store", headers: resolved.headers });
+    if (res.status === 404) {
+      return {
+        ok: false,
+        reason:
+          src.kind === "github" && src.sub
+            ? `No toolboy.json under ${src.sub}/`
+            : "That repo has no toolboy.json at its root",
+      };
+    }
+    if (!res.ok) return { ok: false, reason: `Couldn't read toolboy.json (${res.status})` };
+    const manifest = parseManifest(await res.json());
+    return {
+      ok: true,
+      spec,
+      repoName: manifest.repo.name,
+      pin: resolved.pin,
+      tools: manifest.entities.filter((e) => e.kind === "tool").length,
+      toolchains: manifest.entities.filter((e) => e.kind === "toolchain").length,
+    };
+  } catch (err) {
+    return { ok: false, reason: `Its toolboy.json isn't valid: ${err instanceof Error ? err.message : err}` };
+  }
 }
 
 export async function loadRegistry(

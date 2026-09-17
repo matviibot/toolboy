@@ -28,6 +28,7 @@ export function VaultMenu({ onToast }: { onToast: (m: string, t: "info" | "succe
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<VaultStatus>({ state: "off" });
   const fileRef = useRef<HTMLInputElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const refresh = useCallback(() => {
     void vaultStatus().then(setStatus);
@@ -39,6 +40,24 @@ export function VaultMenu({ onToast }: { onToast: (m: string, t: "info" | "succe
     const id = window.setInterval(refresh, 5_000);
     return () => window.clearInterval(id);
   }, [open, refresh]);
+
+  // dismiss on an outside click or Escape. `mousedown` rather than `click` so the
+  // popover is gone before the click lands on whatever is underneath it.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (ev: MouseEvent) => {
+      if (!rootRef.current?.contains(ev.target as Node)) setOpen(false);
+    };
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   const guard = async (run: () => Promise<unknown>, fail: string) => {
     try {
@@ -71,7 +90,7 @@ export function VaultMenu({ onToast }: { onToast: (m: string, t: "info" | "succe
   };
 
   return (
-    <div style={{ position: "relative" }}>
+    <div ref={rootRef} style={{ position: "relative" }}>
       <IconButton label="Vault — export, import, mirror" active={open} onClick={() => { setOpen((o) => !o); refresh(); }}>
         <Icon name="database" size={17} />
       </IconButton>
@@ -97,7 +116,8 @@ export function VaultMenu({ onToast }: { onToast: (m: string, t: "info" | "succe
               onClick={() => void guard(exportToFile, "Couldn't export")}>
               Export
             </Button>
-            <Button size="sm" style={{ flex: 1 }} onClick={() => fileRef.current?.click()}>
+            <Button size="sm" iconLeft={<Icon name="upload" size={15} />} style={{ flex: 1 }}
+              onClick={() => fileRef.current?.click()}>
               Import
             </Button>
           </div>
@@ -109,12 +129,14 @@ export function VaultMenu({ onToast }: { onToast: (m: string, t: "info" | "succe
           </div>
 
           {status.state === "off" && (
-            <Button size="sm" variant="primary" onClick={() => void guard(connectFolder, "Couldn't connect a folder")}>
+            <Button size="sm" variant="primary" iconLeft={<Icon name="folder" size={15} />}
+              onClick={() => void guard(connectFolder, "Couldn't connect a folder")}>
               Connect a folder
             </Button>
           )}
           {status.state === "needs-permission" && (
-            <Button size="sm" variant="primary" onClick={() => void guard(regrantFolder, "Couldn't re-grant access")}>
+            <Button size="sm" variant="primary" iconLeft={<Icon name="folder" size={15} />}
+              onClick={() => void guard(regrantFolder, "Couldn't re-grant access")}>
               Grant access
             </Button>
           )}

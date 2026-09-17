@@ -1,8 +1,9 @@
 import type { CSSProperties } from "react";
 import {
-  ArrowRight, Box, Braces, Check, Columns2, Command, Database, Download, GitBranch,
-  Globe, Info, Key, KeyRound, ListTree, Lock, Moon, Pipette, Regex, Search, Shield,
-  ShieldCheck, Sparkles, Star, Sun, Workflow, X, type LucideIcon,
+  ArrowRight, Box, Braces, Check, Columns2, Command, Database, Download, FolderOpen,
+  GitBranch, Globe, Info, Key, KeyRound, ListTree, Loader, Lock, Moon, Pipette, Plus,
+  Regex, Search, Shield, ShieldCheck, Sparkles, Star, Sun, Upload, Workflow, X,
+  type LucideIcon,
 } from "lucide-react";
 
 /**
@@ -22,15 +23,18 @@ const REGISTRY: Record<string, LucideIcon> = {
   command: Command,
   database: Database,
   download: Download,
+  folder: FolderOpen,
   "git-branch": GitBranch,
   globe: Globe,
   info: Info,
   key: Key,
   "key-round": KeyRound,
   "list-tree": ListTree,
+  loader: Loader,
   lock: Lock,
   moon: Moon,
   pipette: Pipette,
+  plus: Plus,
   regex: Regex,
   search: Search,
   shield: Shield,
@@ -38,6 +42,7 @@ const REGISTRY: Record<string, LucideIcon> = {
   sparkles: Sparkles,
   star: Star,
   sun: Sun,
+  upload: Upload,
   workflow: Workflow,
   x: X,
 };
