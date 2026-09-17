@@ -5,8 +5,15 @@
       "name": "toolboy",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],
-      "port": 5173,
-      "autoPort": true
+      "port": 5180,
+      "autoPort": false
+    },
+    {
+      "name": "toolboy-full",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "up"],
+      "port": 5180,
+      "autoPort": false
     }
   ]
 }
