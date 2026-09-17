@@ -1,8 +1,12 @@
 import type { HTMLAttributes } from "react";
 
 /**
- * Kbd — a keyboard key chip in mono. For ⌘K hints, shortcut rows, and any key
- * the user is meant to press. Not for icons.
+ * Kbd — a key the user is meant to press, set as type rather than as a 3D keycap.
+ * Chips with borders, shadows and inset highlights read as buttons and pile up fast
+ * in a footer full of hints; this is a quiet mono glyph on a faint wash instead.
+ *
+ * The wash is mixed from the foreground so it inverts with the theme on its own —
+ * a fixed white fill disappears on the light surface, and a fixed dark one muddies it.
  */
 export function Kbd({ children, style, ...rest }: HTMLAttributes<HTMLElement>) {
   return (
@@ -11,14 +15,12 @@ export function Kbd({ children, style, ...rest }: HTMLAttributes<HTMLElement>) {
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-        minWidth: "20px",
-        padding: "4px 7px",
+        minWidth: "18px",
+        padding: "2px 5px",
         font: "var(--type-kbd)",
-        color: "var(--fg-1)",
-        background: "var(--glass-fill-strong)",
-        border: "1px solid var(--glass-stroke)",
+        color: "var(--fg-2)",
+        background: "color-mix(in oklab, var(--fg-1) 9%, transparent)",
         borderRadius: "var(--radius-xs)",
-        boxShadow: "var(--shadow-1), inset 0 1px 0 var(--glass-highlight)",
         ...style,
       }}
       {...rest}

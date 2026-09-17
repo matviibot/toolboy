@@ -12,7 +12,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { repoIdentity } from "../src/loader/resolver";
+import { normalizeUserSource, repoIdentity } from "../src/loader/resolver";
 import { parseSnapshot } from "../src/shell/vault";
 
 test("repo identity is stable across refs and commits", () => {
@@ -90,4 +90,33 @@ test("a value of undefined survives the shape filter", () => {
     }),
   );
   assert.equal(out.storage.length, 4);
+});
+
+/* The lenient parse behind the Add-repo box. It reads what a person types, so the thing
+ * worth pinning is that it stays tolerant of the shapes they actually type — and still
+ * says "that isn't a repo reference" rather than inventing one. */
+
+test("normalizeUserSource accepts the shapes people type", () => {
+  assert.equal(normalizeUserSource("matviibot/tools"), "gh:matviibot/tools@main");
+  assert.equal(normalizeUserSource("  matviibot/tools  "), "gh:matviibot/tools@main");
+  assert.equal(normalizeUserSource("gh:matviibot/tools@v2"), "gh:matviibot/tools@v2");
+  assert.equal(normalizeUserSource("matviibot/tools@feat/x"), "gh:matviibot/tools@feat/x");
+});
+
+test("normalizeUserSource takes a pasted github URL", () => {
+  // what's on the clipboard after visiting the repo
+  assert.equal(normalizeUserSource("https://github.com/matviibot/tools"), "gh:matviibot/tools@main");
+  assert.equal(normalizeUserSource("https://github.com/matviibot/tools.git"), "gh:matviibot/tools@main");
+});
+
+test("normalizeUserSource keeps a sub-path and still defaults the ref", () => {
+  assert.equal(normalizeUserSource("o/r#packages/a"), "gh:o/r@main#packages/a");
+  assert.equal(normalizeUserSource("o/r@v1#packages/a"), "gh:o/r@v1#packages/a");
+});
+
+test("normalizeUserSource rejects what isn't a repo reference", () => {
+  // distinct from "doesn't exist" — the panel words these two differently
+  for (const junk of ["", "   ", "tools", "a/b/c", "not a repo", "@main"]) {
+    assert.equal(normalizeUserSource(junk), null, `expected null for ${JSON.stringify(junk)}`);
+  }
 });
