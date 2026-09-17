@@ -6,6 +6,8 @@
    Persisted to localStorage; entities themselves still come from git (loading.md), so
    we store only the pointer (id + source) plus a cached label for graceful display. */
 
+import { emitDataChange } from "../lib/changes";
+
 export interface Favourite {
   /** entity id, unique within the merged registry */
   id: string;
@@ -41,6 +43,7 @@ export function saveFavourites(favs: Favourite[]): void {
   } catch {
     // storage full / disabled — favourites just won't persist this session
   }
+  emitDataChange();
 }
 
 /** Toggle an entity's favourite status, returning the next list (caller persists +

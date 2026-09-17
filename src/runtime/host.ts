@@ -26,6 +26,9 @@ export interface BridgePerms {
 
 export interface BridgeConfig {
   toolId: string;
+  /** repo identity the tool came from — the other half of its storage namespace,
+      since entity ids are only unique within a repo (see runtime/idb.ts) */
+  repo: string;
   visibility: "public" | "private";
   perms: BridgePerms;
   theme: ThemePayload;
@@ -121,12 +124,12 @@ export class ToolBridge {
 
   private storageRpc(fn: string, args: unknown[]) {
     if (!this.cfg.perms.storage) throw new Error("storage not granted to this tool");
-    const id = this.cfg.toolId;
+    const { repo, toolId: id } = this.cfg;
     switch (fn) {
-      case "get": return storage.get(id, String(args[0]));
-      case "set": return storage.set(id, String(args[0]), args[1]);
-      case "delete": return storage.delete(id, String(args[0]));
-      case "keys": return storage.keys(id);
+      case "get": return storage.get(repo, id, String(args[0]));
+      case "set": return storage.set(repo, id, String(args[0]), args[1]);
+      case "delete": return storage.delete(repo, id, String(args[0]));
+      case "keys": return storage.keys(repo, id);
       default: throw new Error(`unknown storage op: ${fn}`);
     }
   }
